@@ -14,6 +14,19 @@ echo Generating %FILE%
 for %%d in (
   "%APPDATA%\Microsoft\Windows\Start Menu"
   "%ProgramData%\Microsoft\Windows\Start Menu"
-) do @forfiles /P %%d /S /M *.lnk /C "cmd /c echo @fname%DELIM%@path&& (echo @fname 1>&2)" >> %FILE%
+) do @call :doall %%d >> %FILE%
+
+sort %1 /O %1
 
 echo on
+@goto :eof
+
+:doall
+for /R %1 %%i in (*.lnk) do @call :do "%%i"
+rem forfiles /P %1 /S /M *.lnk /C "cmd /c echo @fname%DELIM%@path&& (echo @fname 1>&2)"
+
+
+:do
+echo "%~n1"%DELIM%%1
+echo "%~n1" 1>&2
+goto :eof

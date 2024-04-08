@@ -140,6 +140,7 @@ void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
     Window::GetCreateWindow(cs);
     cs.lpszName = TEXT("Rad Menu");
     cs.style = WS_POPUP | WS_BORDER | WS_VISIBLE;
+    cs.dwExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
     cs.dwExStyle |= WS_EX_CONTROLPARENT;
     cs.x = 100;
     cs.y = 100;
