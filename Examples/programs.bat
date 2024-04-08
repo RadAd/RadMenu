@@ -1,5 +1,6 @@
 @if not exist programs.txt call :generate programs.txt
-@for /F "tokens=1-2 delims=|" %%i in ('Bin\x64Release\RadMenu.exe /il /delim ^^^| /f programs.txt') do @call %%j
+@for /F "tokens=1-2 delims=|" %%i in ('..\Bin\x64Release\RadMenu.exe /il /delim ^^^| /f programs.txt') do @call %%j
+@rem errorlevel 1 pause
 @exit /b
 
 :generate
