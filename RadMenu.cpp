@@ -6,6 +6,8 @@
 //#include <strsafe.h>
 //#include "resource.h"
 
+#include <Shlwapi.h>
+
 #include "EditPlus.h"
 #include "ListBoxPlus.h"
 #include "StrUtils.h"
@@ -60,6 +62,21 @@ LRESULT CALLBACK BuddyProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, U
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
+inline std::tstring GetName(const std::tstring& line)
+{
+    LPCTSTR filename = PathFindFileName(line.c_str());
+    if (filename)
+    {
+        LPCTSTR fileext = PathFindExtension(filename);
+        if (fileext)
+            return std::tstring(filename, fileext - filename);
+        else
+            return filename;
+    }
+    else
+        return {};
+}
+
 class RootWindow : public Window
 {
     friend WindowManager<RootWindow>;
@@ -100,25 +117,21 @@ private:
 
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
-    void AddItem(const std::tstring& line, TCHAR delim, int icon, bool& UseIcon)
+    enum class DisplayMode { LINE, FNAME };
+    void AddItem(const std::tstring& line, const DisplayMode dm)
     {
-        const std::vector<std::tstring> a = split_unquote(line, delim);
-        if (icon >= 0 and a.size() > 1)
-        {
-            m_items.push_back({ line, a[0], a[1] });
-            UseIcon = true;
-        }
-        else
-            m_items.push_back({ line, a[0], });
-        //HICON hIcon = icon >= 0 and a.size() > 1 ? GetFileIcon(a[1].c_str(), icon == ICON_BIG) : NULL;
+        std::tstring name;
+        if (dm == DisplayMode::FNAME)
+            name = GetName(line);
+        m_items.push_back({ line, name });
     }
 
-    void LoadItemsFomFile(std::wistream& is, TCHAR delim, int icon, bool& UseIcon)
+    void LoadItemsFomFile(std::wistream& is, const DisplayMode dm)
     {
         std::tstring line;
         while (std::getline(is, line))
             if (!line.empty())
-                AddItem(line, delim, icon, UseIcon);
+                AddItem(line, dm);
     }
 
     void FillList();
@@ -129,7 +142,6 @@ private:
     {
         std::wstring line;
         std::wstring name;
-        std::wstring icon;
         HICON hIcon;
     };
     std::vector<Item> m_items;
@@ -162,27 +174,32 @@ RootWindow::RootWindow(const int argc, const LPCTSTR* argv)
 void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
 {
     int icon = -1;
-    bool UseIcon = false;
-    TCHAR delim = TEXT(',');
-    for (int argn = 0; argn < argc; ++argn)
+    DisplayMode dm = DisplayMode::LINE;
+    for (int argn = 1; argn < argc; ++argn)
     {
         LPCTSTR arg = argv[argn];
-        if (lstrcmp(arg, TEXT("/f")) == 0)
+        if (lstrcmpi(arg, TEXT("/f")) == 0)
         {
             LPCTSTR file = argv[++argn];
             std::wifstream f(file);
             if (f)
-                LoadItemsFomFile(f, delim, icon, UseIcon);
+                LoadItemsFomFile(f, dm);
         }
-        else if (lstrcmp(arg, TEXT("/is")) == 0)
+        else if (lstrcmpi(arg, TEXT("/is")) == 0)
         {
             icon = ICON_SMALL;
         }
-        else if (lstrcmp(arg, TEXT("/il")) == 0)
+        else if (lstrcmpi(arg, TEXT("/il")) == 0)
         {
             icon = ICON_BIG;
         }
-        else if (lstrcmp(arg, TEXT("/e")) == 0)
+        else if (lstrcmpi(arg, TEXT("/dm")) == 0)
+        {
+            LPCTSTR mode = argv[++argn];
+            if (lstrcmpi(mode, TEXT("fname")) == 0)
+                dm = DisplayMode::FNAME;
+        }
+        else if (lstrcmpi(arg, TEXT("/e")) == 0)
         {
             LPCTSTR elements = argv[++argn];
             const std::vector<std::tstring> a = split_unquote(elements, TEXT(','));
@@ -190,13 +207,9 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
                 if (!s.empty())
                     m_items.push_back({ s, s });
         }
-        else if (lstrcmp(arg, TEXT("/delim")) == 0)
-        {
-            delim = argv[++argn][0];
-        }
     }
-    LoadItemsFomFile(std::wcin, delim, icon, UseIcon);
-    if (UseIcon)
+    LoadItemsFomFile(std::wcin, dm);
+    if (icon != -1)
         m_ListBox.SetIcon(icon);
 }
 
@@ -244,10 +257,12 @@ void RootWindow::OnSize(UINT state, int cx, int cy)
     ScreenToClient(*this, &rc);
     rc.right = cx - Border;
     SetWindowPos(m_hEdit, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
+    InvalidateRect(m_hEdit, nullptr, FALSE);;
 
     rc.top = rc.bottom + Border;
     rc.bottom = cy - Border;
     SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
+    InvalidateRect(m_ListBox, nullptr, FALSE);;
 }
 
 UINT RootWindow::OnNCHitTest(int x, int y)
@@ -326,11 +341,16 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
     {
         const int j = (int) m_ListBox.GetItemData(lpDrawItem->itemID);
         Item& item = m_items[j];
-        if (m_ListBox.GetItemIcon(lpDrawItem->itemID) == NULL and !item.icon.empty())
+        if (m_ListBox.GetItemIcon(lpDrawItem->itemID) == NULL)
         {
             if (item.hIcon == NULL)
-                item.hIcon = GetIconWithoutShortcutOverlay(item.icon.c_str(), m_ListBox.GetIcon() == ICON_BIG);
-            m_ListBox.SetItemIcon(lpDrawItem->itemID, item.hIcon);
+            {
+                item.hIcon = GetIconWithoutShortcutOverlay(item.line.c_str(), m_ListBox.GetIcon() == ICON_BIG);
+                if (!item.hIcon)
+                    item.hIcon = (HICON) INVALID_HANDLE_VALUE;
+            }
+            if (item.hIcon != INVALID_HANDLE_VALUE)
+                m_ListBox.SetItemIcon(lpDrawItem->itemID, item.hIcon);
         }
     }
     SetHandled(false);
@@ -352,9 +372,10 @@ void RootWindow::FillList()
     int i = 0;
     for (const auto& sp : m_items)
     {
+        const std::tstring& text = sp.name.empty() ? sp.line : sp.name;
         bool found = true;
         for (const auto& s : search)
-            if (!StrFindI(sp.name.c_str(), s.c_str()))
+            if (!StrFindI(text.c_str(), s.c_str()))
             {
                 found = false;
                 break;
@@ -362,9 +383,9 @@ void RootWindow::FillList()
 
         if (found)
         {
-            const int n = m_ListBox.AddString(sp.name.c_str());
+            const int n = m_ListBox.AddString(text.c_str());
             m_ListBox.SetItemData(n, j);
-            if (sp.name == buf)
+            if (text == buf)
                 sel = i;
 
             ++i;
