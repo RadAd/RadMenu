@@ -70,8 +70,6 @@ private:
         LPCTSTR pStr;
         LPARAM lParam;
         HICON hIcon;
-        TCHAR strRight[MAX_PATH];
-        BOOL bGray;
     };
 
     ItemData* GetInternalItemData(int i)
@@ -106,14 +104,14 @@ public:
         ListBox::Create(hParent, dwStyle | LBS_OWNERDRAWFIXED, rPos, nID);
     }
 
-    int GetIcon() const
+    int GetIconMode() const
     {
-        return m_Icon;
+        return m_IconMode;
     }
 
-    void SetIcon(int icon)
+    void SetIconMode(int icon_mode)
     {
-        m_Icon = icon;
+        m_IconMode = icon_mode;
     }
 
     int AddString(LPCTSTR lpsz)
@@ -167,20 +165,6 @@ public:
         InvalidateItem(i);
     }
 
-    void SetItemRightString(int i, LPCTSTR s)
-    {
-        ItemData* pData = GetInternalItemData(i);
-        lstrcpy(pData->strRight, s);
-        InvalidateItem(i);
-    }
-
-    void SetItemGray(int i, BOOL b)
-    {
-        ItemData* pData = GetInternalItemData(i);
-        pData->bGray = b;
-        InvalidateItem(i);
-    }
-
     void InvalidateItem(int i)
     {
         if (IsWindow(*this))
@@ -197,8 +181,8 @@ private:
         //if (lpMeasureItem->CtlType == ODT_LISTBOX and lpMeasureItem->CtlID == GetWindowLong(*this, GWL_ID))
         if (lpMeasureItem->CtlType == ODT_LISTBOX and lpMeasureItem->CtlID == m_nID)
         {
-            if (m_Icon >= 0)
-                lpMeasureItem->itemHeight = GetSystemMetrics(m_Icon == ICON_SMALL ? SM_CYSMICON : SM_CYICON) + 4;
+            if (m_IconMode >= 0)
+                lpMeasureItem->itemHeight = GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CYSMICON : SM_CYICON) + 4;
         }
     }
 
@@ -209,12 +193,12 @@ private:
             if (lpDrawItem->itemID == -1) // Empty item
                 return;
 
-            const SIZE szIcon = { GetSystemMetrics(m_Icon == ICON_SMALL ? SM_CXSMICON : SM_CXICON), GetSystemMetrics(m_Icon == ICON_SMALL ? SM_CYSMICON : SM_CYICON) };
+            const SIZE szIcon = { GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CXSMICON : SM_CXICON), GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CYSMICON : SM_CYICON) };
 
             /*const*/ ItemData* pData = reinterpret_cast<ItemData*>(lpDrawItem->itemData);
 
             const COLORREF clrForeground = SetTextColor(lpDrawItem->hDC,
-                lpDrawItem->itemState & ODS_SELECTED ? g_Theme.clrHighlightText : (pData and pData->bGray ? g_Theme.clrGrayText : g_Theme.clrWindowText));
+                lpDrawItem->itemState & ODS_SELECTED ? g_Theme.clrHighlightText : g_Theme.clrWindowText);
 
             const COLORREF clrBackground = SetBkColor(lpDrawItem->hDC,
                 lpDrawItem->itemState & ODS_SELECTED ? g_Theme.clrHighlight : g_Theme.clrWindow);
@@ -223,13 +207,7 @@ private:
             FillRect(lpDrawItem->hDC, &lpDrawItem->rcItem, hBrBackgournd);
 
             RECT rc = lpDrawItem->rcItem;
-            rc.left = lpDrawItem->rcItem.right - Width(lpDrawItem->rcItem) / 4;
-            if (pData)
-                DrawText(lpDrawItem->hDC, pData->strRight, lstrlen(pData->strRight), &rc, DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS | DT_SINGLELINE | DT_NOPREFIX);
-
-            rc.right = rc.left;
-            rc.left = lpDrawItem->rcItem.left;
-            if (m_Icon >= 0)
+            if (m_IconMode >= 0)
                 rc.left += szIcon.cx + 4;
             if (!pData or HasString())
             {
@@ -243,7 +221,7 @@ private:
             SetTextColor(lpDrawItem->hDC, clrForeground);
             SetBkColor(lpDrawItem->hDC, clrBackground);
 
-            if (m_Icon >= 0 and pData and pData->hIcon)
+            if (m_IconMode >= 0 and pData and pData->hIcon)
             {
                 //DrawIcon(lpDrawItem->hDC, lpDrawItem->rcItem.left + 2, lpDrawItem->rcItem.top + 2, pData->hIcon);
                 DrawIconEx(lpDrawItem->hDC,
@@ -292,5 +270,5 @@ public:
 
 private:
     int m_nID{ 0 };
-    int m_Icon = -1;
+    int m_IconMode = -1;
 };

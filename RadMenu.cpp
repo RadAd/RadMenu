@@ -173,7 +173,7 @@ RootWindow::RootWindow(const int argc, const LPCTSTR* argv)
 
 void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
 {
-    int icon = -1;
+    int icon_mode = -1;
     DisplayMode dm = DisplayMode::LINE;
     for (int argn = 1; argn < argc; ++argn)
     {
@@ -187,11 +187,11 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
         }
         else if (lstrcmpi(arg, TEXT("/is")) == 0)
         {
-            icon = ICON_SMALL;
+            icon_mode = ICON_SMALL;
         }
         else if (lstrcmpi(arg, TEXT("/il")) == 0)
         {
-            icon = ICON_BIG;
+            icon_mode = ICON_BIG;
         }
         else if (lstrcmpi(arg, TEXT("/dm")) == 0)
         {
@@ -209,8 +209,8 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
         }
     }
     LoadItemsFomFile(std::wcin, dm);
-    if (icon != -1)
-        m_ListBox.SetIcon(icon);
+    if (icon_mode != -1)
+        m_ListBox.SetIconMode(icon_mode);
 }
 
 BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
@@ -337,7 +337,7 @@ HBRUSH RootWindow::OnCtlColor(HDC hDC, HWND hWndChild, int type)
 
 void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
 {
-    if (lpDrawItem->hwndItem == m_ListBox and m_ListBox.GetIcon() >= 0 and lpDrawItem->itemID >= 0)
+    if (lpDrawItem->hwndItem == m_ListBox and m_ListBox.GetIconMode() >= 0 and lpDrawItem->itemID >= 0)
     {
         const int j = (int) m_ListBox.GetItemData(lpDrawItem->itemID);
         Item& item = m_items[j];
@@ -345,7 +345,7 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
         {
             if (item.hIcon == NULL)
             {
-                item.hIcon = GetIconWithoutShortcutOverlay(item.line.c_str(), m_ListBox.GetIcon() == ICON_BIG);
+                item.hIcon = GetIconWithoutShortcutOverlay(item.line.c_str(), m_ListBox.GetIconMode() == ICON_BIG);
                 if (!item.hIcon)
                     item.hIcon = (HICON) INVALID_HANDLE_VALUE;
             }
