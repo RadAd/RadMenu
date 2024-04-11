@@ -1,5 +1,5 @@
 @if not exist programs.txt call :generate programs.txt
-@for /F %%i in ('..\Bin\x64Release\RadMenu.exe /il /dm fname /f programs.txt') do @call %%i
+@for /F %%i in ('..\Bin\x64Release\RadMenu.exe /il /dm fname /f programs.txt /sort') do @call %%i
 @rem errorlevel 1 pause
 @exit /b
 

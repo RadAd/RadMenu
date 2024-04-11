@@ -248,22 +248,39 @@ private:
         }
     }
 
+    int OnCompareItem(const COMPAREITEMSTRUCT* lpCompareItem)
+    {
+        if (lpCompareItem->hwndItem != *this || HasString())
+        {
+            SetHandled(false);
+            return 0;
+        }
+        else
+        {
+            const ItemData* pData1 = reinterpret_cast<ItemData*>(lpCompareItem->itemData1);
+            const ItemData* pData2 = reinterpret_cast<ItemData*>(lpCompareItem->itemData2);
+            return lstrcmpi(pData1->pStr, pData2->pStr);
+        }
+    }
+
 private:
     bool m_bHandled;
 
     void SetHandled(bool bHandled) { m_bHandled = bHandled;  }
 
 public:
-    LRESULT HandleChainMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam)
+    LRESULT HandleChainMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam, bool& bHandled)
     {
-        m_bHandled = false;
+        m_bHandled = bHandled;
         LRESULT ret = 0;
         switch (uMsg)
         {
             HANDLE_MSG(WM_MEASUREITEM, OnMeasureItem);
             HANDLE_MSG(WM_DRAWITEM, OnDrawItem);
             HANDLE_MSG(WM_DELETEITEM, OnDeleteItem);
+            HANDLE_MSG(WM_COMPAREITEM, OnCompareItem);
         }
+        bHandled = m_bHandled;
 
         return ret;
     }

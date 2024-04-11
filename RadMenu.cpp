@@ -138,6 +138,7 @@ private:
 
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
+    bool m_Sorted = false;
     struct Item
     {
         std::wstring line;
@@ -207,6 +208,10 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
                 if (!s.empty())
                     m_items.push_back({ s, s });
         }
+        else if (lstrcmpi(arg, TEXT("/sort")) == 0)
+        {
+            m_Sorted = true;
+        }
     }
     LoadItemsFomFile(std::wcin, dm);
     if (icon_mode != -1)
@@ -230,7 +235,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
-    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP, rc, IDC_LIST);
+    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | (m_Sorted ? LBS_SORT : 0), rc, IDC_LIST);
 
     FillList();
 
@@ -413,7 +418,12 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
     }
 
     if (!IsHandled())
-        ret = m_ListBox.HandleChainMessage(uMsg, wParam, lParam);
+    {
+        bool bHandled = false;
+        ret = m_ListBox.HandleChainMessage(uMsg, wParam, lParam, bHandled);
+        if (bHandled)
+            SetHandled(true);
+    }
     if (!IsHandled())
         ret = Window::HandleMessage(uMsg, wParam, lParam);
 
