@@ -2,6 +2,7 @@
 #include "Rad/Dialog.h"
 #include "Rad/Windowxx.h"
 #include "Rad/Log.h"
+#include "Rad/Format.h"
 //#include <tchar.h>
 //#include <strsafe.h>
 //#include "resource.h"
@@ -185,6 +186,8 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
             std::wifstream f(file);
             if (f)
                 LoadItemsFomFile(f, dm);
+            else
+                MessageBox(*this, Format(TEXT("Error opening file: %s"), file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
         }
         else if (lstrcmpi(arg, TEXT("/is")) == 0)
         {
@@ -211,6 +214,24 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
         {
             m_Sorted = true;
+        }
+        else if (lstrcmpi(arg, TEXT("/?")) == 0)
+        {
+            MessageBox(*this,
+                TEXT("RadMenu <options>\n")
+                TEXT("Where <options> are:\n")
+                TEXT("  /is - use small icons\n")
+                TEXT("  /il - use large icons\n")
+                TEXT("  /dm <mode> - display mode\n")
+                TEXT("  Where <mode> is one of:\n")
+                TEXT("    fname - display file name\n")
+                TEXT("  /e <elements> - list of options\n")
+                TEXT("  /sort - sort items"),
+                TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
+        }
+        else
+        {
+            MessageBox(*this, Format(TEXT("Unknown argument: %s"), arg).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
         }
     }
     LoadItemsFomFile(std::wcin, dm);
