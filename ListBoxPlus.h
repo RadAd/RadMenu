@@ -257,9 +257,9 @@ private:
         }
         else
         {
-            const ItemData* pData1 = reinterpret_cast<ItemData*>(lpCompareItem->itemData1);
-            const ItemData* pData2 = reinterpret_cast<ItemData*>(lpCompareItem->itemData2);
-            return lstrcmpi(pData1->pStr, pData2->pStr);
+            LPCTSTR pStr1 = lpCompareItem->itemID1 == -1 ? reinterpret_cast<LPCTSTR>(lpCompareItem->itemData1) : reinterpret_cast<ItemData*>(lpCompareItem->itemData1)->pStr;
+            LPCTSTR pStr2 = reinterpret_cast<ItemData*>(lpCompareItem->itemData2)->pStr;
+            return lstrcmpi(pStr1, pStr2);
         }
     }
 

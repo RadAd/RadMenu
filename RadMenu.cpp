@@ -380,10 +380,8 @@ void RootWindow::FillList()
     if (sel >= 0)
         m_ListBox.GetText(sel, buf);
     const std::vector<std::tstring> search = split_unquote(text, TEXT(' '));
-    sel = 0;
     m_ListBox.ResetContent();
     int j = 0;
-    int i = 0;
     for (const auto& sp : m_items)
     {
         const std::tstring& text = sp.name.empty() ? sp.line : sp.name;
@@ -399,14 +397,11 @@ void RootWindow::FillList()
         {
             const int n = m_ListBox.AddString(text.c_str());
             m_ListBox.SetItemData(n, j);
-            if (text == buf)
-                sel = i;
-
-            ++i;
         }
         ++j;
     }
-    m_ListBox.SetCurSel(sel);
+    sel = ListBox_FindStringExact(m_ListBox, 0, buf);
+    m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
     SetWindowRedraw(m_ListBox, TRUE);
 }
 
