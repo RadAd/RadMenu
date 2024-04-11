@@ -235,7 +235,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
-    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | (m_Sorted ? LBS_SORT : 0), rc, IDC_LIST);
+    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (m_Sorted ? LBS_SORT : 0), rc, IDC_LIST);
 
     FillList();
 
@@ -308,6 +308,15 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
         {
         case EN_CHANGE:
             FillList();
+            break;
+        }
+        break;
+
+    case IDC_LIST:
+        switch (codeNotify)
+        {
+        case LBN_DBLCLK:
+            SendMessage(*this, WM_COMMAND, IDOK, 0);
             break;
         }
         break;
