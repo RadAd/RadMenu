@@ -47,16 +47,19 @@ LRESULT CALLBACK BuddyProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, U
         const UINT vk = (UINT) (wParam);
         const int cRepeat = (int) (short) LOWORD(lParam);
         UINT flags = (UINT) HIWORD(lParam);
-        switch (vk)
+        if ((GetKeyState(VK_SHIFT) & 0x8000) == 0)
         {
-        case VK_UP:         case VK_DOWN:
-        case VK_HOME:       case VK_END:
-        case VK_NEXT:       case VK_PRIOR:
-        {
-            HWND hWndBuddy = GetWindow(hWnd, GW_HWNDNEXT);
-            SendMessage(hWndBuddy, uMsg, wParam, lParam);
-            return TRUE;
-        }
+            switch (vk)
+            {
+            case VK_UP:         case VK_DOWN:
+            case VK_HOME:       case VK_END:
+            case VK_NEXT:       case VK_PRIOR:
+            {
+                HWND hWndBuddy = GetWindow(hWnd, GW_HWNDNEXT);
+                SendMessage(hWndBuddy, uMsg, wParam, lParam);
+                return TRUE;
+            }
+            }
         }
     }
     }
