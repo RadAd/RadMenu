@@ -111,6 +111,7 @@ private:
     void OnDestroy();
     void OnSetFocus(HWND hwndOldFocus);
     void OnSize(UINT state, int cx, int cy);
+    void OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized);
     UINT OnNCHitTest(int x, int y);
     void OnCommand(int id, HWND hWndCtl, UINT codeNotify);
     HBRUSH OnCtlColor(HDC hdc, HWND hWndChild, int type);
@@ -291,6 +292,14 @@ void RootWindow::OnSize(UINT state, int cx, int cy)
     InvalidateRect(m_ListBox, nullptr, FALSE);;
 }
 
+void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)
+{
+#ifndef _DEBUG
+    if (state == WA_INACTIVE)
+        SendMessage(*this, WM_COMMAND, IDCANCEL, 0);
+#endif
+}
+
 UINT RootWindow::OnNCHitTest(int x, int y)
 {
     POINT pt = { x, y };
@@ -435,6 +444,7 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
         HANDLE_MSG(WM_DESTROY, OnDestroy);
         HANDLE_MSG(WM_SETFOCUS, OnSetFocus);
         HANDLE_MSG(WM_SIZE, OnSize);
+        HANDLE_MSG(WM_ACTIVATE, OnActivate);
         HANDLE_MSG(WM_NCHITTEST, OnNCHitTest);
         HANDLE_MSG(WM_COMMAND, OnCommand);
         HANDLE_MSG(WM_CTLCOLOREDIT, OnCtlColor);
