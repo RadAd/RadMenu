@@ -97,10 +97,7 @@ class RootWindow : public Window
     friend WindowManager<RootWindow>;
 public:
     static ATOM Register() { return WindowManager<RootWindow>::Register(); }
-    static RootWindow* Create(const Options& options) 
-    {
-        return WindowManager<RootWindow>::Create(reinterpret_cast<LPVOID>(const_cast<Options*>(&options)));
-    }
+    static RootWindow* Create(const Options& options) { return WindowManager<RootWindow>::Create(reinterpret_cast<LPVOID>(const_cast<Options*>(&options))); }
 
 protected:
     static void GetCreateWindow(CREATESTRUCT& cs);
@@ -207,11 +204,6 @@ void Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         else
             MessageBox(NULL, Format(TEXT("Unknown argument: %s"), arg).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
-#if 0
-    LoadItemsFomFile(std::wcin, dm);
-    if (icon_mode != -1)
-        m_ListBox.SetIconMode(icon_mode);
-#endif
 }
 
 BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
