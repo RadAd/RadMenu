@@ -78,28 +78,29 @@ inline std::tstring GetName(const std::tstring& line)
         return {};
 }
 
+enum class DisplayMode { LINE, FNAME };
+
+struct Options
+{
+    int icon_mode = -1;
+    DisplayMode dm = DisplayMode::LINE;
+    LPCTSTR file = nullptr;
+    LPCTSTR elements = nullptr;
+    bool sort = false;
+    bool blur = true;
+
+    void ParseCommandLine(const int argc, const LPCTSTR* argv);
+};
+
 class RootWindow : public Window
 {
     friend WindowManager<RootWindow>;
 public:
     static ATOM Register() { return WindowManager<RootWindow>::Register(); }
-    static RootWindow* Create(const int argc, const LPCTSTR* argv) 
+    static RootWindow* Create(const Options& options) 
     {
-        CREATESTRUCT cs = {};
-        WindowManager<RootWindow>::GetCreateWindow(cs);
-        RootWindow* self = new RootWindow(argc, argv);
-        if (self and CreateWnd(cs, self) != NULL)
-            return self;
-        else
-        {
-            delete self;
-            return nullptr;
-        }
+        return WindowManager<RootWindow>::Create(reinterpret_cast<LPVOID>(const_cast<Options*>(&options)));
     }
-
-    RootWindow(const int argc, const LPCTSTR* argv);
-
-    void ParseCommandLine(const int argc, const LPCTSTR* argv);
 
 protected:
     static void GetCreateWindow(CREATESTRUCT& cs);
@@ -119,7 +120,6 @@ private:
 
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
-    enum class DisplayMode { LINE, FNAME };
     void AddItem(const std::tstring& line, const DisplayMode dm)
     {
         std::tstring name;
@@ -140,7 +140,6 @@ private:
 
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
-    bool m_Sorted = false;
     struct Item
     {
         std::wstring line;
@@ -169,35 +168,17 @@ void RootWindow::GetWndClass(WNDCLASS& wc)
     wc.hbrBackground = g_Theme.brWindow;
 }
 
-RootWindow::RootWindow(const int argc, const LPCTSTR* argv)
+void Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
 {
-    ParseCommandLine(argc, argv);
-}
-
-void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
-{
-    int icon_mode = -1;
-    DisplayMode dm = DisplayMode::LINE;
     for (int argn = 1; argn < argc; ++argn)
     {
         LPCTSTR arg = argv[argn];
         if (lstrcmpi(arg, TEXT("/f")) == 0)
-        {
-            LPCTSTR file = argv[++argn];
-            std::wifstream f(file);
-            if (f)
-                LoadItemsFomFile(f, dm);
-            else
-                MessageBox(*this, Format(TEXT("Error opening file: %s"), file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
-        }
+            file = argv[++argn];
         else if (lstrcmpi(arg, TEXT("/is")) == 0)
-        {
             icon_mode = ICON_SMALL;
-        }
         else if (lstrcmpi(arg, TEXT("/il")) == 0)
-        {
             icon_mode = ICON_BIG;
-        }
         else if (lstrcmpi(arg, TEXT("/dm")) == 0)
         {
             LPCTSTR mode = argv[++argn];
@@ -205,43 +186,38 @@ void RootWindow::ParseCommandLine(const int argc, const LPCTSTR* argv)
                 dm = DisplayMode::FNAME;
         }
         else if (lstrcmpi(arg, TEXT("/e")) == 0)
-        {
-            LPCTSTR elements = argv[++argn];
-            const std::vector<std::tstring> a = split_unquote(elements, TEXT(','));
-            for (const auto& s : a)
-                if (!s.empty())
-                    m_items.push_back({ s, s });
-        }
+            elements = argv[++argn];
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
-        {
-            m_Sorted = true;
-        }
+            sort = true;
+        else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
+            blur = false;
         else if (lstrcmpi(arg, TEXT("/?")) == 0)
-        {
-            MessageBox(*this,
+            MessageBox(NULL,
                 TEXT("RadMenu <options>\n")
                 TEXT("Where <options> are:\n")
-                TEXT("  /is - use small icons\n")
-                TEXT("  /il - use large icons\n")
-                TEXT("  /dm <mode> - display mode\n")
+                TEXT("  /is\t\t- use small icons\n")
+                TEXT("  /il\t\t- use large icons\n")
+                TEXT("  /dm <mode>\t- display mode\n")
                 TEXT("  Where <mode> is one of:\n")
-                TEXT("    fname - display file name\n")
-                TEXT("  /e <elements> - list of options\n")
-                TEXT("  /sort - sort items"),
+                TEXT("    fname\t\t- display file name\n")
+                TEXT("  /e <elements>\t- list of options\n")
+                TEXT("  /sort\t\t- sort items\n")
+                TEXT("  /noblur\t\t- remove blur effect"),
                 TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
-        }
         else
-        {
-            MessageBox(*this, Format(TEXT("Unknown argument: %s"), arg).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
-        }
+            MessageBox(NULL, Format(TEXT("Unknown argument: %s"), arg).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
+#if 0
     LoadItemsFomFile(std::wcin, dm);
     if (icon_mode != -1)
         m_ListBox.SetIconMode(icon_mode);
+#endif
 }
 
 BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 {
+    const Options& options = *reinterpret_cast<Options*>(lpCreateStruct->lpCreateParams);
+
     SetWindowBlur(*this);
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
@@ -257,7 +233,26 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
-    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (m_Sorted ? LBS_SORT : 0), rc, IDC_LIST);
+    if (options.icon_mode != -1)
+        m_ListBox.SetIconMode(options.icon_mode);
+    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
+
+    if (options.file != nullptr)
+    {
+        std::wifstream f(options.file);
+        if (f)
+            LoadItemsFomFile(f, options.dm);
+        else
+            MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
+    }
+    if (options.elements != nullptr)
+    {
+        const std::vector<std::tstring> a = split_unquote(options.elements, TEXT(','));
+        for (const auto& s : a)
+            if (!s.empty())
+                m_items.push_back({ s, s });
+    }
+    LoadItemsFomFile(std::wcin, options.dm);
 
     FillList();
 
@@ -467,7 +462,7 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
 
 bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
 {
-    RadLogInitWnd(NULL, "RadMenu", TEXT("RadMenu"));
+    RadLogInitWnd(NULL, "RadMenu", L"RadMenu");
 
     if (true)
     {
@@ -478,14 +473,17 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
         g_Theme.clrGrayText = RGB(128, 128, 128);
     }
 
+    Options options;
+    options.ParseCommandLine(__argc, __wargv);
+
     InitTheme();
 
     CHECK_LE_RET(RootWindow::Register(), false);
 
-    RootWindow* prw = RootWindow::Create(__argc, __wargv);
+    RootWindow* prw = RootWindow::Create(options);
     CHECK_LE_RET(prw != nullptr, false);
 
-    RadLogInitWnd(*prw, "RadMenu", TEXT("RadMenu"));
+    RadLogInitWnd(*prw, "RadMenu", L"RadMenu");
     g_hWndDlg = *prw;
     ShowWindow(*prw, nShowCmd);
 
