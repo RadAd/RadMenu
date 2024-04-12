@@ -286,7 +286,7 @@ void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)
 {
 #ifndef _DEBUG
     if (state == WA_INACTIVE)
-        SendMessage(*this, WM_COMMAND, IDCANCEL, 0);
+        SendMessage(*this, WM_CLOSE, 0, 0);
 #endif
 }
 
