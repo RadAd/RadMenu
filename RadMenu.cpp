@@ -5,7 +5,7 @@
 #include "Rad/Format.h"
 //#include <tchar.h>
 //#include <strsafe.h>
-//#include "resource.h"
+#include "resource.h"
 
 #include <Shlwapi.h>
 
@@ -21,6 +21,7 @@
 
 Theme g_Theme;
 
+extern HINSTANCE g_hInstance;
 extern HWND g_hWndDlg;
 
 template <class R, class F, typename... Ps>
@@ -166,6 +167,7 @@ void RootWindow::GetWndClass(WNDCLASS& wc)
 {
     Window::GetWndClass(wc);
     wc.hbrBackground = g_Theme.brWindow;
+    wc.hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_ICON1));
 }
 
 void Options::ParseCommandLine(const int argc, const LPCTSTR* argv)

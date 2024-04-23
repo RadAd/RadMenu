@@ -84,6 +84,9 @@
   <ItemGroup>
     <ResourceCompile Include="RadMenu.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\RadMenu.ico" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

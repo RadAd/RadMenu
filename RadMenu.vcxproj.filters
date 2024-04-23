@@ -60,4 +60,7 @@
   <ItemGroup>
     <ResourceCompile Include="RadMenu.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\RadMenu.ico" />
+  </ItemGroup>
 </Project>
