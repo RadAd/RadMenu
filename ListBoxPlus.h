@@ -41,14 +41,14 @@ public:
     int GetCount() const { return ListBox_GetCount(m_hWnd); }
     int GetCurSel() const { return ListBox_GetCurSel(m_hWnd); }
     LPARAM GetItemData(int i) const { return ListBox_GetItemData(m_hWnd, i); }
-    int GetItemRect(int i, LPRECT pRect) { return ListBox_GetItemRect(m_hWnd, i, pRect); }
+    int GetItemRect(int i, LPRECT pRect) const { return ListBox_GetItemRect(m_hWnd, i, pRect); }
     int GetText(int i, LPTSTR lpszBuffer) const { return ListBox_GetText(m_hWnd, i, lpszBuffer); }
     int SetCurSel(int i) { return ListBox_SetCurSel(m_hWnd, i); }
     int SetItemData(int i, LPARAM data) { return ListBox_SetItemData(m_hWnd, i, data); }
-    int SetTopIndex(int i) { return ListBox_SetTopIndex(m_hWnd, i); }
+    int SetTopIndex(int i) const { return ListBox_SetTopIndex(m_hWnd, i); }
+    int FindStringExact(int i, LPCTSTR lpsz) const { return ListBox_FindStringExact(m_hWnd, i, lpsz); }
 
-
-    int GetVisibleCount()
+    int GetVisibleCount() const
     {
         RECT rcClient;
         GetClientRect(*this, &rcClient);
@@ -69,7 +69,7 @@ private:
     {
         LPCTSTR pStr;
         LPARAM lParam;
-        HICON hIcon;
+        int iIcon;
     };
 
     ItemData* GetInternalItemData(int i)
@@ -79,6 +79,7 @@ private:
         if (pData == nullptr)
         {
             pData = new ItemData({});
+            pData->iIcon = -1;
             ListBox::SetItemData(i, reinterpret_cast<LPARAM>(pData));
         }
         return pData;
@@ -114,6 +115,23 @@ public:
         m_IconMode = icon_mode;
     }
 
+    SIZE GetIconSize() const
+    {
+        return { GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CXSMICON : SM_CXICON), GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CYSMICON : SM_CYICON) };
+    }
+
+    HIMAGELIST SetImageList(HIMAGELIST hNewImageList)
+    {
+        HIMAGELIST hOldImageList = m_hImageList;
+        m_hImageList = hNewImageList;
+        return hOldImageList;
+    }
+
+    HIMAGELIST GetImageList() const
+    {
+        return m_hImageList;
+    }
+
     int AddString(LPCTSTR lpsz)
     {
         if (HasString())
@@ -121,6 +139,7 @@ public:
         else
         {
             ItemData* pData = new ItemData({});
+            pData->iIcon = -1;
             pData->pStr = lpsz;
             return ListBox::AddItemData(LPARAM(pData));
         }
@@ -152,16 +171,16 @@ public:
         pData->lParam = data;
     }
 
-    HICON GetItemIcon(int i) const
+    int GetItemIconIndex(int i) const
     {
         const ItemData* pData = GetInternalItemData(i);
-        return pData->hIcon;
+        return pData->iIcon;
     }
 
-    void SetItemIcon(int i, HICON hIcon)
+    void SetItemIconIndex(int i, int iIcon)
     {
         ItemData* pData = GetInternalItemData(i);
-        pData->hIcon = hIcon;
+        pData->iIcon = iIcon;
         InvalidateItem(i);
     }
 
@@ -182,7 +201,7 @@ private:
         if (lpMeasureItem->CtlType == ODT_LISTBOX and lpMeasureItem->CtlID == m_nID)
         {
             if (m_IconMode >= 0)
-                lpMeasureItem->itemHeight = GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CYSMICON : SM_CYICON) + 4;
+                lpMeasureItem->itemHeight = GetIconSize().cy + 4;
         }
     }
 
@@ -193,7 +212,7 @@ private:
             if (lpDrawItem->itemID == -1) // Empty item
                 return;
 
-            const SIZE szIcon = { GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CXSMICON : SM_CXICON), GetSystemMetrics(m_IconMode == ICON_SMALL ? SM_CYSMICON : SM_CYICON) };
+            const SIZE szIcon = GetIconSize();
 
             /*const*/ ItemData* pData = reinterpret_cast<ItemData*>(lpDrawItem->itemData);
 
@@ -221,13 +240,11 @@ private:
             SetTextColor(lpDrawItem->hDC, clrForeground);
             SetBkColor(lpDrawItem->hDC, clrBackground);
 
-            if (m_IconMode >= 0 and pData and pData->hIcon)
+            if (m_hImageList != NULL and pData and pData->iIcon >= 0)
             {
-                //DrawIcon(lpDrawItem->hDC, lpDrawItem->rcItem.left + 2, lpDrawItem->rcItem.top + 2, pData->hIcon);
-                DrawIconEx(lpDrawItem->hDC,
-                    lpDrawItem->rcItem.left + 2, lpDrawItem->rcItem.top + 2, pData->hIcon,
-                    szIcon.cx, szIcon.cy,
-                    0, hBrBackgournd, DI_NORMAL);
+                ImageList_DrawEx(m_hImageList, pData->iIcon, lpDrawItem->hDC,
+                    lpDrawItem->rcItem.left + 2, lpDrawItem->rcItem.top + 2, szIcon.cx, szIcon.cy,
+                    CLR_DEFAULT, CLR_DEFAULT, ILD_NORMAL);
             }
 
             if (lpDrawItem->itemState & ODS_FOCUS)
@@ -266,7 +283,7 @@ private:
 private:
     bool m_bHandled;
 
-    void SetHandled(bool bHandled) { m_bHandled = bHandled;  }
+    void SetHandled(bool bHandled) { m_bHandled = bHandled; }
 
 public:
     LRESULT HandleChainMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam, bool& bHandled)
@@ -287,5 +304,6 @@ public:
 
 private:
     int m_nID{ 0 };
-    int m_IconMode = -1;
+    int m_IconMode{ -1 };
+    HIMAGELIST m_hImageList{ NULL };
 };

@@ -170,7 +170,7 @@ private:
     {
         std::shared_ptr<std::tstring> line;
         std::shared_ptr<std::tstring> name;
-        HICON hIcon;
+        int iIcon = -1;
     };
     std::vector<Item> m_items;
 
@@ -262,7 +262,11 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
     if (options.icon_mode != -1)
+    {
         m_ListBox.SetIconMode(options.icon_mode);
+        const SIZE szIcon = m_ListBox.GetIconSize();
+        ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100)));
+    }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
 
     if (options.file != nullptr)
@@ -292,8 +296,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
 void RootWindow::OnDestroy()
 {
-    for (const auto& sp : m_items)
-        DestroyIcon(sp.hIcon);
+    ImageList_Destroy(m_ListBox.SetImageList(NULL));
     PostQuitMessage(0);
 }
 
@@ -411,16 +414,21 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
     {
         const int j = (int) m_ListBox.GetItemData(lpDrawItem->itemID);
         Item& item = m_items[j];
-        if (m_ListBox.GetItemIcon(lpDrawItem->itemID) == NULL)
+        if (m_ListBox.GetItemIconIndex(lpDrawItem->itemID) == -1)
         {
-            if (item.hIcon == NULL)
+            if (item.iIcon == -1)
             {
-                item.hIcon = GetIconWithoutShortcutOverlay(item.line->c_str(), m_ListBox.GetIconMode() == ICON_BIG);
-                if (!item.hIcon)
-                    item.hIcon = (HICON) INVALID_HANDLE_VALUE;
+                HICON hIcon = GetIconWithoutShortcutOverlay(item.line->c_str(), m_ListBox.GetIconMode() == ICON_BIG);
+                if (!hIcon)
+                    item.iIcon = -2;
+                else
+                {
+                    HIMAGELIST hImageList = m_ListBox.GetImageList();
+                    item.iIcon = ImageList_AddIcon(hImageList, hIcon);
+                    DestroyIcon(hIcon);
+                }
             }
-            if (item.hIcon != INVALID_HANDLE_VALUE)
-                m_ListBox.SetItemIcon(lpDrawItem->itemID, item.hIcon);
+            m_ListBox.SetItemIconIndex(lpDrawItem->itemID, item.iIcon);
         }
     }
     SetHandled(false);
@@ -468,10 +476,11 @@ void RootWindow::FillList()
         {
             const int n = m_ListBox.AddString(text.c_str());
             m_ListBox.SetItemData(n, j);
+            m_ListBox.SetItemIconIndex(n, sp.iIcon);
         }
         ++j;
     }
-    const int sel = ListBox_FindStringExact(m_ListBox, 0, seltext.c_str());
+    const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
     m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
     SetWindowRedraw(m_ListBox, TRUE);
 }
@@ -491,10 +500,11 @@ void RootWindow::AddItem(const Item& i)
         const int j = static_cast<int>(m_items.size()) - 1;
         const int n = m_ListBox.AddString(text.c_str());
         m_ListBox.SetItemData(n, j);
+        m_ListBox.SetItemIconIndex(n, sp.iIcon);
         SendMessage(m_ListBox, WM_SETREDRAW, TRUE, 0);
     }
 
-    //const int sel = ListBox_FindStringExact(m_ListBox, 0, seltext.c_str());
+    //const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
     //m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
 }
 
