@@ -18,8 +18,12 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <thread>
 
 Theme g_Theme;
+
+#define UM_ADDITEM  (WM_USER + 127)
 
 extern HINSTANCE g_hInstance;
 extern HWND g_hWndDlg;
@@ -121,33 +125,60 @@ private:
 
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
+    static void LoadItemsFomFileThread(std::wistream* is, const DisplayMode dm, HWND hWnd)
+    {
+        std::tstring line;
+        while (std::getline(*is, line))
+            if (!line.empty())
+            {
+                std::tstring name;
+                if (dm == DisplayMode::FNAME)
+                    name = GetName(line);
+                const Item i({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
+                SendMessage(hWnd, UM_ADDITEM, 0, UINT_PTR(&i));
+            }
+        if (is != &std::wcin)
+            delete is;
+    }
+
     void AddItem(const std::tstring& line, const DisplayMode dm)
     {
         std::tstring name;
         if (dm == DisplayMode::FNAME)
             name = GetName(line);
-        m_items.push_back({ line, name });
+        m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
     }
 
-    void LoadItemsFomFile(std::wistream& is, const DisplayMode dm)
+    void LoadItemsFomFile(std::wistream* is, const DisplayMode dm)
     {
+#if 0
         std::tstring line;
-        while (std::getline(is, line))
+        while (std::getline(*is, line))
             if (!line.empty())
                 AddItem(line, dm);
+        if (is != &std::wcin)
+            delete is;
+#else
+        std::thread t(LoadItemsFomFileThread, is, dm, *this);
+        t.detach();
+#endif
     }
-
-    void FillList();
 
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
     struct Item
     {
-        std::wstring line;
-        std::wstring name;
+        std::shared_ptr<std::tstring> line;
+        std::shared_ptr<std::tstring> name;
         HICON hIcon;
     };
     std::vector<Item> m_items;
+
+    std::vector<std::tstring> GetSearchTerms() const;
+    std::tstring GetSelectedText() const;
+    static bool Matches(const std::vector<std::tstring>& search, const std::tstring& text);
+    void FillList();
+    void AddItem(const Item& i);
 };
 
 void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
@@ -236,9 +267,9 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     if (options.file != nullptr)
     {
-        std::wifstream f(options.file);
-        if (f)
-            LoadItemsFomFile(f, options.dm);
+        auto f = std::make_unique<std::wifstream>(options.file);
+        if (*f)
+            LoadItemsFomFile(f.release(), options.dm);
         else
             MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
@@ -247,9 +278,12 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         const std::vector<std::tstring> a = split_unquote(options.elements, TEXT(','));
         for (const auto& s : a)
             if (!s.empty())
-                m_items.push_back({ s, s });
+            {
+                auto ss = std::make_shared<std::tstring>(s);
+                m_items.push_back({ ss, ss });
+            }
     }
-    LoadItemsFomFile(std::wcin, options.dm);
+    LoadItemsFomFile(&std::wcin, options.dm);
 
     FillList();
 
@@ -381,7 +415,7 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
         {
             if (item.hIcon == NULL)
             {
-                item.hIcon = GetIconWithoutShortcutOverlay(item.line.c_str(), m_ListBox.GetIconMode() == ICON_BIG);
+                item.hIcon = GetIconWithoutShortcutOverlay(item.line->c_str(), m_ListBox.GetIconMode() == ICON_BIG);
                 if (!item.hIcon)
                     item.hIcon = (HICON) INVALID_HANDLE_VALUE;
             }
@@ -392,39 +426,76 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
     SetHandled(false);
 }
 
-void RootWindow::FillList()
+std::vector<std::tstring> RootWindow::GetSearchTerms() const
 {
-    SetWindowRedraw(m_ListBox, FALSE);
     TCHAR text[1024];
     Edit_GetText(m_hEdit, text, ARRAYSIZE(text));
-    int sel = m_ListBox.GetCurSel();
+    return split_unquote(text, TEXT(' '));
+}
+
+std::tstring RootWindow::GetSelectedText() const
+{
+    const int sel = m_ListBox.GetCurSel();
     TCHAR buf[1024] = TEXT("");
     if (sel >= 0)
         m_ListBox.GetText(sel, buf);
-    const std::vector<std::tstring> search = split_unquote(text, TEXT(' '));
+    return buf;
+}
+
+bool RootWindow::Matches(const std::vector<std::tstring>& search, const std::tstring& text)
+{
+    bool found = true;
+    for (const auto& s : search)
+        if (!StrFindI(text.c_str(), s.c_str()))
+        {
+            found = false;
+            break;
+        }
+    return found;
+}
+
+void RootWindow::FillList()
+{
+    SetWindowRedraw(m_ListBox, FALSE);
+    const std::tstring seltext = GetSelectedText();
+    const std::vector<std::tstring> search = GetSearchTerms();
     m_ListBox.ResetContent();
     int j = 0;
     for (const auto& sp : m_items)
     {
-        const std::tstring& text = sp.name.empty() ? sp.line : sp.name;
-        bool found = true;
-        for (const auto& s : search)
-            if (!StrFindI(text.c_str(), s.c_str()))
-            {
-                found = false;
-                break;
-            }
-
-        if (found)
+        const std::tstring& text = sp.name->empty() ? *sp.line : *sp.name;
+        if (Matches(search, text))
         {
             const int n = m_ListBox.AddString(text.c_str());
             m_ListBox.SetItemData(n, j);
         }
         ++j;
     }
-    sel = ListBox_FindStringExact(m_ListBox, 0, buf);
+    const int sel = ListBox_FindStringExact(m_ListBox, 0, seltext.c_str());
     m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
     SetWindowRedraw(m_ListBox, TRUE);
+}
+
+void RootWindow::AddItem(const Item& i)
+{
+    m_items.push_back(i);
+    const Item& sp = m_items.back();
+
+    //const std::tstring seltext = GetSelectedText();
+    const std::vector<std::tstring> search = GetSearchTerms();
+
+    const std::tstring& text = sp.name->empty() ? *sp.line : *sp.name;
+    if (Matches(search, text))
+    {
+        SendMessage(m_ListBox, WM_SETREDRAW, FALSE, 0);
+        const int j = static_cast<int>(m_items.size()) - 1;
+        const int n = m_ListBox.AddString(text.c_str());
+        m_ListBox.SetItemData(n, j);
+        SendMessage(m_ListBox, WM_SETREDRAW, TRUE, 0);
+    }
+
+    //const int sel = ListBox_FindStringExact(m_ListBox, 0, seltext.c_str());
+    //m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
 }
 
 LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam)
@@ -442,6 +513,13 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
         HANDLE_MSG(WM_CTLCOLOREDIT, OnCtlColor);
         HANDLE_MSG(WM_CTLCOLORLISTBOX, OnCtlColor);
         HANDLE_MSG(WM_DRAWITEM, OnDrawItem);
+    case UM_ADDITEM:
+    {
+        SetHandled(true);
+        const Item* i = reinterpret_cast<Item*>(lParam);
+        AddItem(*i);
+        break;
+    }
     }
 
     if (!IsHandled())
