@@ -103,6 +103,12 @@ struct Options
 class RootWindow : public Window
 {
     friend WindowManager<RootWindow>;
+    ~RootWindow()
+    {
+        for (auto& t : m_threads)
+            t.join();
+    }
+
 public:
     static ATOM Register() { return WindowManager<RootWindow>::Register(); }
     static RootWindow* Create(const Options& options) { return WindowManager<RootWindow>::Create(reinterpret_cast<LPVOID>(const_cast<Options*>(&options))); }
@@ -145,8 +151,8 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, dm, *this);
-        t.detach();
+        std::thread t(LoadItemsFomFileThread, is, dm, HWND(*this));
+        m_threads.push_back(std::move(t));
 #endif
     }
 
@@ -159,6 +165,7 @@ private:
         int iIcon = -1;
     };
     std::vector<Item> m_items;
+    std::vector<std::thread> m_threads;
 
     std::vector<std::tstring> GetSearchTerms() const;
     std::tstring GetSelectedText() const;
