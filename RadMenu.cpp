@@ -394,6 +394,10 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
         const int sel = m_ListBox.GetCurSel();
         if (sel >= 0)
         {
+            if (GetKeyState(VK_CONTROL))
+                std::wcout << TEXT('^');
+            if (GetKeyState(VK_SHIFT))
+                std::wcout << TEXT('+');
             const int j = (int) m_ListBox.GetItemData(sel);
             std::wcout << m_items[j].line << std::endl;
             SendMessage(*this, WM_CLOSE, 0, 0);
