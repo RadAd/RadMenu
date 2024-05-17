@@ -130,23 +130,9 @@ private:
         std::tstring line;
         while (std::getline(*is, line))
             if (!line.empty())
-            {
-                std::tstring name;
-                if (dm == DisplayMode::FNAME)
-                    name = GetName(line);
-                const Item i({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
-                SendMessage(hWnd, UM_ADDITEM, 0, UINT_PTR(&i));
-            }
+                SendMessage(hWnd, UM_ADDITEM, WPARAM(dm), LPARAM(line.c_str()));
         if (is != &std::wcin)
             delete is;
-    }
-
-    void AddItem(const std::tstring& line, const DisplayMode dm)
-    {
-        std::tstring name;
-        if (dm == DisplayMode::FNAME)
-            name = GetName(line);
-        m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
     }
 
     void LoadItemsFomFile(std::wistream* is, const DisplayMode dm)
@@ -155,7 +141,7 @@ private:
         std::tstring line;
         while (std::getline(*is, line))
             if (!line.empty())
-                AddItem(line, dm);
+                AddItem(line.c_str(), dm);
         if (is != &std::wcin)
             delete is;
 #else
@@ -178,7 +164,16 @@ private:
     std::tstring GetSelectedText() const;
     static bool Matches(const std::vector<std::tstring>& search, const std::tstring& text);
     void FillList();
-    void AddItem(const Item& i);
+    void AddItemToList(const Item& i, const size_t j, const std::vector<std::tstring>& search);
+
+    Item& AddItem(const LPCTSTR line, const DisplayMode dm)
+    {
+        std::tstring name;
+        if (dm == DisplayMode::FNAME)
+            name = GetName(line);
+        m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
+        return m_items.back();
+    }
 };
 
 void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
@@ -468,44 +463,25 @@ void RootWindow::FillList()
     const std::tstring seltext = GetSelectedText();
     const std::vector<std::tstring> search = GetSearchTerms();
     m_ListBox.ResetContent();
-    int j = 0;
+    size_t j = 0;
     for (const auto& sp : m_items)
-    {
-        const std::tstring& text = sp.name->empty() ? *sp.line : *sp.name;
-        if (Matches(search, text))
-        {
-            const int n = m_ListBox.AddString(text.c_str());
-            m_ListBox.SetItemData(n, j);
-            m_ListBox.SetItemIconIndex(n, sp.iIcon);
-        }
-        ++j;
-    }
+        AddItemToList(sp, j++, search);
     const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
     m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
     SetWindowRedraw(m_ListBox, TRUE);
 }
 
-void RootWindow::AddItem(const Item& i)
+void RootWindow::AddItemToList(const Item& sp, const size_t j, const std::vector<std::tstring>& search)
 {
-    m_items.push_back(i);
-    const Item& sp = m_items.back();
-
-    //const std::tstring seltext = GetSelectedText();
-    const std::vector<std::tstring> search = GetSearchTerms();
-
     const std::tstring& text = sp.name->empty() ? *sp.line : *sp.name;
     if (Matches(search, text))
     {
         SendMessage(m_ListBox, WM_SETREDRAW, FALSE, 0);
-        const int j = static_cast<int>(m_items.size()) - 1;
         const int n = m_ListBox.AddString(text.c_str());
         m_ListBox.SetItemData(n, j);
         m_ListBox.SetItemIconIndex(n, sp.iIcon);
         SendMessage(m_ListBox, WM_SETREDRAW, TRUE, 0);
     }
-
-    //const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
-    //m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
 }
 
 LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam)
@@ -526,8 +502,11 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
     case UM_ADDITEM:
     {
         SetHandled(true);
-        const Item* i = reinterpret_cast<Item*>(lParam);
-        AddItem(*i);
+        const DisplayMode dm = DisplayMode(wParam);
+        const LPCTSTR line = reinterpret_cast<LPCTSTR>(lParam);
+        const size_t j = m_items.size();
+        const std::vector<std::tstring> search = GetSearchTerms();
+        AddItemToList(AddItem(line, dm), j, search);
         break;
     }
     }
