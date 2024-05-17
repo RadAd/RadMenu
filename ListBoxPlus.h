@@ -1,6 +1,7 @@
 #pragma once
 #include "WindowsPlus.h"
 #include <Windowsx.h>
+#include "Rad/MessageHandler.h"
 
 struct Theme
 {
@@ -62,7 +63,7 @@ private:
     HWND m_hWnd{ NULL };
 };
 
-class ListBoxOwnerDrawnFixed : public ListBox
+class ListBoxOwnerDrawnFixed : public ListBox, public MessageChain
 {
 private:
     struct ItemData
@@ -280,15 +281,9 @@ private:
         }
     }
 
-private:
-    bool m_bHandled;
-
-    void SetHandled(bool bHandled) { m_bHandled = bHandled; }
-
-public:
-    LRESULT HandleChainMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam, bool& bHandled)
+protected:
+    LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override
     {
-        m_bHandled = bHandled;
         LRESULT ret = 0;
         switch (uMsg)
         {
@@ -297,8 +292,6 @@ public:
             HANDLE_MSG(WM_DELETEITEM, OnDeleteItem);
             HANDLE_MSG(WM_COMPAREITEM, OnCompareItem);
         }
-        bHandled = m_bHandled;
-
         return ret;
     }
 

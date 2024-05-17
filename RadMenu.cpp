@@ -535,7 +535,7 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
     if (!IsHandled())
     {
         bool bHandled = false;
-        ret = m_ListBox.HandleChainMessage(uMsg, wParam, lParam, bHandled);
+        ret = m_ListBox.ProcessMessage(*this, uMsg, wParam, lParam, bHandled);
         if (bHandled)
             SetHandled(true);
     }
