@@ -81,7 +81,7 @@ inline void SetWindowAccentDisabled(HWND hWnd)
     }
 }
 
-inline void SetWindowBlur(HWND hWnd)
+inline void SetWindowBlur(HWND hWnd, bool bEnabled)
 {
     const HINSTANCE hModule = GetModuleHandle(TEXT("user32.dll"));
     if (hModule)
@@ -137,7 +137,7 @@ inline void SetWindowBlur(HWND hWnd)
         const pSetWindowCompositionAttribute SetWindowCompositionAttribute = (pSetWindowCompositionAttribute) GetProcAddress(hModule, "SetWindowCompositionAttribute");
         if (SetWindowCompositionAttribute)
         {
-            ACCENTPOLICY policy = { ACCENT_ENABLE_ACRYLICBLURBEHIND, 0, 0x80000000, 0 };
+            ACCENTPOLICY policy = { bEnabled ? ACCENT_ENABLE_ACRYLICBLURBEHIND : ACCENT_DISABLED, 0, 0x80000000, 0 };
             //ACCENTPOLICY policy = { ACCENT_ENABLE_BLURBEHIND };
             WINCOMPATTRDATA data = { WCA_ACCENT_POLICY, &policy, sizeof(ACCENTPOLICY) };
             SetWindowCompositionAttribute(hWnd, &data);

@@ -123,6 +123,8 @@ private:
     void OnDestroy();
     void OnSetFocus(HWND hwndOldFocus);
     void OnSize(UINT state, int cx, int cy);
+    void OnEnterSizeMove();
+    void OnExitSizeMove();
     void OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized);
     UINT OnNCHitTest(int x, int y);
     void OnCommand(int id, HWND hWndCtl, UINT codeNotify);
@@ -248,7 +250,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 {
     const Options& options = *reinterpret_cast<Options*>(lpCreateStruct->lpCreateParams);
 
-    SetWindowBlur(*this);
+    SetWindowBlur(*this, true);
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
 
@@ -321,6 +323,16 @@ void RootWindow::OnSize(UINT state, int cx, int cy)
     rc.bottom = cy - Border;
     SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
     InvalidateRect(m_ListBox, nullptr, FALSE);;
+}
+
+void RootWindow::OnEnterSizeMove()
+{
+    SetWindowBlur(*this, false);
+}
+
+void RootWindow::OnExitSizeMove()
+{
+    SetWindowBlur(*this, true);
 }
 
 void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)
@@ -504,6 +516,8 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
         HANDLE_MSG(WM_DESTROY, OnDestroy);
         HANDLE_MSG(WM_SETFOCUS, OnSetFocus);
         HANDLE_MSG(WM_SIZE, OnSize);
+        HANDLE_MSG(WM_ENTERSIZEMOVE, OnEnterSizeMove);
+        HANDLE_MSG(WM_EXITSIZEMOVE, OnExitSizeMove);
         HANDLE_MSG(WM_ACTIVATE, OnActivate);
         HANDLE_MSG(WM_NCHITTEST, OnNCHitTest);
         HANDLE_MSG(WM_COMMAND, OnCommand);
