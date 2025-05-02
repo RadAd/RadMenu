@@ -580,7 +580,7 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
     if (!options.ParseCommandLine(__argc, __wargv))
         return false;
 
-    if (options.elements == nullptr && GetStdHandle(STD_INPUT_HANDLE) == NULL)
+    if (options.elements == nullptr && options.file == nullptr && GetStdHandle(STD_INPUT_HANDLE) == NULL)
     {
         ShowUsage();
         return false;
