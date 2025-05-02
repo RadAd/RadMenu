@@ -211,7 +211,7 @@ private:
             for (const int c : m_cols)
             {
                 if (!name.empty())
-                    name += TEXT(", ");
+                    name += TEXT("\t");
                 if (c >= 0 && a.size() > c)
                     name += a[c];
                 else if (name.empty())
@@ -331,7 +331,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         const SIZE szIcon = m_ListBox.GetIconSize();
         ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100)));
     }
-    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
+    m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
 
     for (const std::tstring& s : options.cols)
         m_cols.push_back(_tstoi(s.c_str()) - 1);

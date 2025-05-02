@@ -99,6 +99,12 @@ private:
         return dwStyle & LBS_HASSTRINGS;
     }
 
+    bool UseTabStops() const
+    {
+        const DWORD dwStyle = GetWindowStyle(*this);
+        return dwStyle & LBS_USETABSTOPS;
+    }
+
 public:
     void Create(_In_ HWND hParent, _In_ DWORD dwStyle, _In_ RECT rPos, _In_ int nID)
     {
@@ -229,14 +235,15 @@ private:
             RECT rc = lpDrawItem->rcItem;
             if (m_IconMode >= 0)
                 rc.left += szIcon.cx + 4;
+            const UINT format = DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_SINGLELINE | DT_NOPREFIX | DT_EXPANDTABS;
             if (!pData or HasString())
             {
                 TCHAR text[1024];
                 const int cch = GetText(lpDrawItem->itemID, text);
-                DrawText(lpDrawItem->hDC, text, cch, &rc, DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_SINGLELINE | DT_NOPREFIX);
+                DrawText(lpDrawItem->hDC, text, cch, &rc, format);
             }
             else
-                DrawText(lpDrawItem->hDC, pData->pStr, -1, &rc, DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS | DT_SINGLELINE | DT_NOPREFIX);
+                DrawText(lpDrawItem->hDC, pData->pStr, -1, &rc, format);
 
             SetTextColor(lpDrawItem->hDC, clrForeground);
             SetBkColor(lpDrawItem->hDC, clrBackground);
