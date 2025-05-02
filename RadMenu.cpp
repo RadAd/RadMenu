@@ -96,6 +96,7 @@ struct Options
     LPCTSTR elements = nullptr;
     std::vector<std::tstring> cols;
     int header = 0;
+    WCHAR sep = TEXT(',');
     bool sort = false;
     bool blur = true;
 
@@ -135,34 +136,37 @@ private:
 
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
-    static void LoadItemsFomFileThread(std::wistream* is, const DisplayMode dm, HWND hWnd)
+    struct AddItemData;
+    static void LoadItemsFomFileThread(std::wistream* is, const AddItemData* paid, HWND hWnd)
     {
         std::tstring line;
         while (std::getline(*is, line))
             if (!line.empty())
-                SendMessage(hWnd, UM_ADDITEM, WPARAM(dm), LPARAM(line.c_str()));
+                SendMessage(hWnd, UM_ADDITEM, WPARAM(paid), LPARAM(line.c_str()));
         if (is != &std::wcin)
             delete is;
+        delete paid;
     }
 
-    void LoadItemsFomFile(std::wistream* is, const DisplayMode dm, int header, const std::vector<std::tstring>& cols)
+    void LoadItemsFomFile(std::wistream* is, const Options& options)
     {
-        if (header > 0)
+        if (options.header > 0)
         {
+            int header = options.header;
             std::vector<std::tstring> headernames;
             std::tstring line;
             while (header > 0 && std::getline(*is, line))
             {
-                headernames = split_unquote(line, TEXT(','));
+                headernames = split_unquote(line, options.sep);
                 --header;
             }
 
             // TODO Show header somewhere
 
             assert(m_cols.size() == cols.size());
-            for (int i = 0; i < cols.size(); ++i)
+            for (int i = 0; i < options.cols.size(); ++i)
             {
-                auto it = std::find(headernames.begin(), headernames.end(), cols[i]);
+                auto it = std::find(headernames.begin(), headernames.end(), options.cols[i]);
                 if (it != headernames.end())
                 {
                     const int c = static_cast<int>(std::distance(headernames.begin(), it));
@@ -179,7 +183,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, dm, HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -192,7 +196,7 @@ private:
         std::shared_ptr<std::tstring> name;
         int iIcon = -1;
     };
-    std::vector<int> m_cols;
+    std::vector<int> m_cols;    // TODO Move into AddItemData
     std::vector<Item> m_items;
     std::vector<std::thread> m_threads;
 
@@ -202,12 +206,17 @@ private:
     void FillList();
     void AddItemToList(const Item& i, const size_t j, const std::vector<std::tstring>& search);
 
-    Item& AddItem(const LPCTSTR line, const DisplayMode dm)
+    struct AddItemData
+    {
+        DisplayMode dm;
+        WCHAR sep;
+    };
+    Item& AddItem(const LPCTSTR line, const AddItemData& aid)
     {
         std::tstring name;
         if (!m_cols.empty())
         {
-            const std::vector<std::tstring> a = split_unquote(line, TEXT(','));
+            const std::vector<std::tstring> a = split_unquote(line, aid.sep);
             for (const int c : m_cols)
             {
                 if (!name.empty())
@@ -218,7 +227,7 @@ private:
                     name += TEXT(" ");
             }
         }
-        else if (dm == DisplayMode::FNAME) // TODO How combine FNAME with m_cols
+        else if (aid.dm == DisplayMode::FNAME) // TODO How combine FNAME with m_cols
             name = GetName(line);
         m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
         return m_items.back();
@@ -253,6 +262,7 @@ void ShowUsage()
         TEXT("  /e <elements>\t- list of options\n")
         TEXT("  /f <filename>\t- list of options\n")
         TEXT("  /cols <col,>\t- list of columns\n")
+        TEXT("  /sep <char>\t- column separator\n")
         TEXT("  /header <num>\t- number of header lines\n")
         TEXT("  /is\t\t- use small icons\n")
         TEXT("  /il\t\t- use large icons\n")
@@ -289,6 +299,14 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
             cols = split(argv[++argn], TEXT(','));
         else if (lstrcmpi(arg, TEXT("/header")) == 0)
             header = _tstoi(argv[++argn]);
+        else if (lstrcmpi(arg, TEXT("/sep")) == 0)
+        {
+            LPCTSTR s = argv[++argn];
+            if (_tcsncmp(s, TEXT("\\x"), 2) == 0)
+                sep = WCHAR(_tcstol(s + 2, nullptr, 16));
+            else
+                sep = s[0];
+        }
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
             sort = true;
         else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
@@ -340,7 +358,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     {
         auto f = std::make_unique<std::wifstream>(options.file);
         if (*f)
-            LoadItemsFomFile(f.release(), options.dm, options.header, options.cols);
+            LoadItemsFomFile(f.release(), options);
         else
             MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
@@ -354,7 +372,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
                 m_items.push_back({ ss, ss });
             }
     }
-    LoadItemsFomFile(&std::wcin, options.dm, options.header, options.cols);
+    LoadItemsFomFile(&std::wcin, options);
 
     FillList();
 
@@ -590,11 +608,11 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
     case UM_ADDITEM:
     {
         SetHandled(true);
-        const DisplayMode dm = DisplayMode(wParam);
+        const AddItemData* paid = (AddItemData*)(wParam);
         const LPCTSTR line = reinterpret_cast<LPCTSTR>(lParam);
         const size_t j = m_items.size();
         const std::vector<std::tstring> search = GetSearchTerms();
-        AddItemToList(AddItem(line, dm), j, search);
+        AddItemToList(AddItem(line, *paid), j, search);
         break;
     }
     }
