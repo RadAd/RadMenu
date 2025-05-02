@@ -3,7 +3,7 @@
 #include "Rad/Windowxx.h"
 #include "Rad/Log.h"
 #include "Rad/Format.h"
-//#include <tchar.h>
+#include <tchar.h>
 //#include <strsafe.h>
 #include "resource.h"
 
@@ -12,7 +12,7 @@
 #include "EditPlus.h"
 #include "ListBoxPlus.h"
 #include "StrUtils.h"
-#include "resource.h"
+//#include "resource.h"
 
 #include <string>
 #include <vector>
@@ -94,6 +94,7 @@ struct Options
     DisplayMode dm = DisplayMode::LINE;
     LPCTSTR file = nullptr;
     LPCTSTR elements = nullptr;
+    std::vector<std::tstring> cols;
     bool sort = false;
     bool blur = true;
 
@@ -135,6 +136,7 @@ private:
 
     static void LoadItemsFomFileThread(std::wistream* is, const DisplayMode dm, HWND hWnd)
     {
+        // TODO Grab headers from file and fill out m_cols
         std::tstring line;
         while (std::getline(*is, line))
             if (!line.empty())
@@ -166,6 +168,7 @@ private:
         std::shared_ptr<std::tstring> name;
         int iIcon = -1;
     };
+    std::vector<int> m_cols;
     std::vector<Item> m_items;
     std::vector<std::thread> m_threads;
 
@@ -178,7 +181,18 @@ private:
     Item& AddItem(const LPCTSTR line, const DisplayMode dm)
     {
         std::tstring name;
-        if (dm == DisplayMode::FNAME)
+        if (!m_cols.empty())
+        {
+            const std::vector<std::tstring> a = split_unquote(line, TEXT(','));
+            for (const int c : m_cols)
+            {
+                if (!name.empty())
+                    name += TEXT(", ");
+                if (a.size() > (c - 1))
+                    name += a[c - 1];
+            }
+        }
+        else if (dm == DisplayMode::FNAME) // TODO How combine FNAME with m_cols
             name = GetName(line);
         m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
         return m_items.back();
@@ -242,6 +256,8 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         }
         else if (lstrcmpi(arg, TEXT("/e")) == 0)
             elements = argv[++argn];
+        else if (lstrcmpi(arg, TEXT("/cols")) == 0)
+            cols = split(argv[++argn], TEXT(','));
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
             sort = true;
         else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
@@ -287,6 +303,8 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
 
+    for (const std::tstring& s : options.cols)
+        m_cols.push_back(_tstoi(s.c_str()));
     if (options.file != nullptr)
     {
         auto f = std::make_unique<std::wifstream>(options.file);
