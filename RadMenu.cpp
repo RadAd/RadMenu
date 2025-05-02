@@ -285,6 +285,7 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         else if (lstrcmpi(arg, TEXT("/e")) == 0)
             elements = argv[++argn];
         else if (lstrcmpi(arg, TEXT("/cols")) == 0)
+            // TODO Allow for formatting column, ie right align, max width
             cols = split(argv[++argn], TEXT(','));
         else if (lstrcmpi(arg, TEXT("/header")) == 0)
             header = _tstoi(argv[++argn]);
