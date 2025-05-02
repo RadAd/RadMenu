@@ -97,7 +97,7 @@ struct Options
     bool sort = false;
     bool blur = true;
 
-    void ParseCommandLine(const int argc, const LPCTSTR* argv);
+    bool ParseCommandLine(const int argc, const LPCTSTR* argv);
 };
 
 class RootWindow : public Window
@@ -205,8 +205,26 @@ void RootWindow::GetWndClass(WNDCLASS& wc)
     wc.hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_ICON1));
 }
 
-void Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
+void ShowUsage()
 {
+    MessageBox(NULL,
+        TEXT("RadMenu <options>\n")
+        TEXT("Where <options> are:\n")
+        TEXT("  /e <elements>\t- list of options\n")
+        TEXT("  /f <filename>\t- list of options\n")
+        TEXT("  /is\t\t- use small icons\n")
+        TEXT("  /il\t\t- use large icons\n")
+        TEXT("  /dm <mode>\t- display mode\n")
+        TEXT("  Where <mode> is one of:\n")
+        TEXT("    fname\t\t- display file name\n")
+        TEXT("  /sort\t\t- sort items\n")
+        TEXT("  /noblur\t\t- remove blur effect"),
+        TEXT("Rad Menu"), MB_OK | MB_ICONINFORMATION);
+}
+
+bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
+{
+    bool ret = true;
     for (int argn = 1; argn < argc; ++argn)
     {
         LPCTSTR arg = argv[argn];
@@ -229,21 +247,17 @@ void Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
             blur = false;
         else if (lstrcmpi(arg, TEXT("/?")) == 0)
-            MessageBox(NULL,
-                TEXT("RadMenu <options>\n")
-                TEXT("Where <options> are:\n")
-                TEXT("  /is\t\t- use small icons\n")
-                TEXT("  /il\t\t- use large icons\n")
-                TEXT("  /dm <mode>\t- display mode\n")
-                TEXT("  Where <mode> is one of:\n")
-                TEXT("    fname\t\t- display file name\n")
-                TEXT("  /e <elements>\t- list of options\n")
-                TEXT("  /sort\t\t- sort items\n")
-                TEXT("  /noblur\t\t- remove blur effect"),
-                TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
+        {
+            ShowUsage();
+            ret = false;
+        }
         else
+        {
             MessageBox(NULL, Format(TEXT("Unknown argument: %s"), arg).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
+            ret = false;
+        }
     }
+    return ret;
 }
 
 BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
@@ -563,7 +577,14 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
     }
 
     Options options;
-    options.ParseCommandLine(__argc, __wargv);
+    if (!options.ParseCommandLine(__argc, __wargv))
+        return false;
+
+    if (options.elements == nullptr && GetStdHandle(STD_INPUT_HANDLE) == NULL)
+    {
+        ShowUsage();
+        return false;
+    }
 
     InitTheme();
 
