@@ -95,6 +95,7 @@ struct Options
     LPCTSTR file = nullptr;
     LPCTSTR elements = nullptr;
     std::vector<std::tstring> cols;
+    int header = 0;
     bool sort = false;
     bool blur = true;
 
@@ -136,7 +137,6 @@ private:
 
     static void LoadItemsFomFileThread(std::wistream* is, const DisplayMode dm, HWND hWnd)
     {
-        // TODO Grab headers from file and fill out m_cols
         std::tstring line;
         while (std::getline(*is, line))
             if (!line.empty())
@@ -145,8 +145,32 @@ private:
             delete is;
     }
 
-    void LoadItemsFomFile(std::wistream* is, const DisplayMode dm)
+    void LoadItemsFomFile(std::wistream* is, const DisplayMode dm, int header, const std::vector<std::tstring>& cols)
     {
+        if (header > 0)
+        {
+            std::vector<std::tstring> headernames;
+            std::tstring line;
+            while (header > 0 && std::getline(*is, line))
+            {
+                headernames = split_unquote(line, TEXT(','));
+                --header;
+            }
+
+            // TODO Show header somewhere
+
+            assert(m_cols.size() == cols.size());
+            for (int i = 0; i < cols.size(); ++i)
+            {
+                auto it = std::find(headernames.begin(), headernames.end(), cols[i]);
+                if (it != headernames.end())
+                {
+                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                    m_cols[i] = c;
+                }
+            }
+        }
+
 #if 0
         std::tstring line;
         while (std::getline(*is, line))
@@ -188,8 +212,10 @@ private:
             {
                 if (!name.empty())
                     name += TEXT(", ");
-                if (a.size() > (c - 1))
-                    name += a[c - 1];
+                if (c >= 0 && a.size() > c)
+                    name += a[c];
+                else if (name.empty())
+                    name += TEXT(" ");
             }
         }
         else if (dm == DisplayMode::FNAME) // TODO How combine FNAME with m_cols
@@ -226,6 +252,8 @@ void ShowUsage()
         TEXT("Where <options> are:\n")
         TEXT("  /e <elements>\t- list of options\n")
         TEXT("  /f <filename>\t- list of options\n")
+        TEXT("  /cols <col,>\t- list of columns\n")
+        TEXT("  /header <num>\t- number of header lines\n")
         TEXT("  /is\t\t- use small icons\n")
         TEXT("  /il\t\t- use large icons\n")
         TEXT("  /dm <mode>\t- display mode\n")
@@ -258,6 +286,8 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
             elements = argv[++argn];
         else if (lstrcmpi(arg, TEXT("/cols")) == 0)
             cols = split(argv[++argn], TEXT(','));
+        else if (lstrcmpi(arg, TEXT("/header")) == 0)
+            header = _tstoi(argv[++argn]);
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
             sort = true;
         else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
@@ -304,12 +334,12 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
 
     for (const std::tstring& s : options.cols)
-        m_cols.push_back(_tstoi(s.c_str()));
+        m_cols.push_back(_tstoi(s.c_str()) - 1);
     if (options.file != nullptr)
     {
         auto f = std::make_unique<std::wifstream>(options.file);
         if (*f)
-            LoadItemsFomFile(f.release(), options.dm);
+            LoadItemsFomFile(f.release(), options.dm, options.header, options.cols);
         else
             MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
@@ -323,7 +353,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
                 m_items.push_back({ ss, ss });
             }
     }
-    LoadItemsFomFile(&std::wcin, options.dm);
+    LoadItemsFomFile(&std::wcin, options.dm, options.header, options.cols);
 
     FillList();
 
