@@ -150,6 +150,9 @@ private:
 
     void LoadItemsFomFile(std::wistream* is, const Options& options)
     {
+        std::vector<int> cols;
+        for (const std::tstring& s : options.cols)
+            cols.push_back(_tstoi(s.c_str()) - 1);
         if (options.header > 0)
         {
             int header = options.header;
@@ -163,14 +166,14 @@ private:
 
             // TODO Show header somewhere
 
-            assert(m_cols.size() == cols.size());
+            assert(cols.size() == options.cols.size());
             for (int i = 0; i < options.cols.size(); ++i)
             {
                 auto it = std::find(headernames.begin(), headernames.end(), options.cols[i]);
                 if (it != headernames.end())
                 {
                     const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                    m_cols[i] = c;
+                    cols[i] = c;
                 }
             }
         }
@@ -183,7 +186,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep }), HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -196,7 +199,6 @@ private:
         std::shared_ptr<std::tstring> name;
         int iIcon = -1;
     };
-    std::vector<int> m_cols;    // TODO Move into AddItemData
     std::vector<Item> m_items;
     std::vector<std::thread> m_threads;
 
@@ -210,14 +212,15 @@ private:
     {
         DisplayMode dm;
         WCHAR sep;
+        std::vector<int> cols;
     };
     Item& AddItem(const LPCTSTR line, const AddItemData& aid)
     {
         std::tstring name;
-        if (!m_cols.empty())
+        if (!aid.cols.empty())
         {
             const std::vector<std::tstring> a = split_unquote(line, aid.sep);
-            for (const int c : m_cols)
+            for (const int c : aid.cols)
             {
                 if (!name.empty())
                     name += TEXT("\t");
@@ -227,7 +230,7 @@ private:
                     name += TEXT(" ");
             }
         }
-        else if (aid.dm == DisplayMode::FNAME) // TODO How combine FNAME with m_cols
+        else if (aid.dm == DisplayMode::FNAME) // TODO How combine FNAME with aid.cols
             name = GetName(line);
         m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
         return m_items.back();
@@ -352,8 +355,6 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
 
-    for (const std::tstring& s : options.cols)
-        m_cols.push_back(_tstoi(s.c_str()) - 1);
     if (options.file != nullptr)
     {
         auto f = std::make_unique<std::wifstream>(options.file);
