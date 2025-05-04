@@ -95,6 +95,7 @@ struct Options
     LPCTSTR file = nullptr;
     LPCTSTR elements = nullptr;
     std::vector<std::tstring> cols;
+    std::vector<std::tstring> out_cols;
     int header = 0;
     WCHAR sep = TEXT(',');
     bool sort = false;
@@ -153,6 +154,9 @@ private:
         std::vector<int> cols;
         for (const std::tstring& s : options.cols)
             cols.push_back(_tstoi(s.c_str()) - 1);
+        std::vector<int> out_cols;
+        for (const std::tstring& s : options.out_cols)
+            out_cols.push_back(_tstoi(s.c_str()) - 1);
         if (options.header > 0)
         {
             int header = options.header;
@@ -176,6 +180,17 @@ private:
                     cols[i] = c;
                 }
             }
+
+            assert(out_cols.size() == options.out_cols.size());
+            for (int i = 0; i < options.out_cols.size(); ++i)
+            {
+                auto it = std::find(headernames.begin(), headernames.end(), options.out_cols[i]);
+                if (it != headernames.end())
+                {
+                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                    out_cols[i] = c;
+                }
+            }
         }
 
 #if 0
@@ -186,7 +201,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols }), HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols, out_cols }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -213,13 +228,15 @@ private:
         DisplayMode dm;
         WCHAR sep;
         std::vector<int> cols;
+        std::vector<int> out_cols;
     };
     Item& AddItem(const LPCTSTR line, const AddItemData& aid)
     {
+        const std::vector<std::tstring> a = !aid.cols.empty() || !aid.out_cols.empty() ? split_unquote(line, aid.sep) : std::vector<std::tstring>();
+
         std::tstring name;
         if (!aid.cols.empty())
         {
-            const std::vector<std::tstring> a = split_unquote(line, aid.sep);
             for (const int c : aid.cols)
             {
                 if (!name.empty())
@@ -232,7 +249,23 @@ private:
         }
         else if (aid.dm == DisplayMode::FNAME) // TODO How combine FNAME with aid.cols
             name = GetName(line);
-        m_items.push_back({ std::make_shared<std::tstring>(line), std::make_shared<std::tstring>(name) });
+
+        std::tstring line_out;
+        if (!aid.out_cols.empty())
+        {
+            for (const int c : aid.out_cols)
+            {
+                if (!line_out.empty())
+                    line_out += aid.sep;
+                if (c >= 0 && a.size() > c)
+                    line_out += a[c];
+                else if (line_out.empty())
+                    line_out += TEXT(" ");
+            }
+        }
+        else
+            line_out = line;
+        m_items.push_back({ std::make_shared<std::tstring>(line_out), std::make_shared<std::tstring>(name) });
         return m_items.back();
     }
 };
@@ -265,6 +298,7 @@ void ShowUsage()
         TEXT("  /e <elements>\t- list of options\n")
         TEXT("  /f <filename>\t- list of options\n")
         TEXT("  /cols <col,>\t- list of columns\n")
+        TEXT("  /out-cols <col,>\t- list of output columns\n")
         TEXT("  /sep <char>\t- column separator\n")
         TEXT("  /header <num>\t- number of header lines\n")
         TEXT("  /is\t\t- use small icons\n")
@@ -300,6 +334,8 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         else if (lstrcmpi(arg, TEXT("/cols")) == 0)
             // TODO Allow for formatting column, ie right align, max width
             cols = split(argv[++argn], TEXT(','));
+        else if (lstrcmpi(arg, TEXT("/out-cols")) == 0)
+            out_cols = split(argv[++argn], TEXT(','));
         else if (lstrcmpi(arg, TEXT("/header")) == 0)
             header = _tstoi(argv[++argn]);
         else if (lstrcmpi(arg, TEXT("/sep")) == 0)
