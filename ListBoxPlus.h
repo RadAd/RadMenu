@@ -209,6 +209,12 @@ private:
         {
             if (m_IconMode >= 0)
                 lpMeasureItem->itemHeight = GetIconSize().cy + 4;
+            else
+            {
+                HFONT hFont = (HFONT) SendMessage(*this, WM_GETFONT, 0, 0);
+                const SIZE TextSize = GetFontSize(*this, hFont, TEXT("Mg"), 2);
+                lpMeasureItem->itemHeight = TextSize.cy + 4;
+            }
         }
     }
 

@@ -372,12 +372,15 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
 
-    const HANDLE hFont = GetStockObject(DEFAULT_GUI_FONT);
+    LOGFONT lf;
+    SystemParametersInfo(SPI_GETICONTITLELOGFONT, 0, &lf, 0);
+    const HFONT hFont = CreateFontIndirect(&lf);
     const SIZE TextSize = GetFontSize(*this, hFont, TEXT("Mg"), 2);
 
-    RECT rc = { Border, Border, Width(rcClient) - Border, Border + TextSize.cy + Border };
+    RECT rc = { Border, Border, Width(rcClient) - Border, Border + TextSize.cy };
 
     m_hEdit = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_LEFT, rc, IDC_EDIT);
+    SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
     SetWindowSubclass(m_hEdit, BuddyProc, 0, 0);
     Edit_SetCueBannerTextFocused(m_hEdit, TEXT("Search"), TRUE);
 
@@ -390,6 +393,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100)));
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
+    SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
 
     if (options.file != nullptr)
     {
