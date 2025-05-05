@@ -368,6 +368,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 {
     const Options& options = *reinterpret_cast<Options*>(lpCreateStruct->lpCreateParams);
 
+    if (options.blur)
     SetWindowBlur(*this, true);
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
@@ -377,12 +378,15 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     const HFONT hFont = CreateFontIndirect(&lf);
     const SIZE TextSize = GetFontSize(*this, hFont, TEXT("Mg"), 2);
 
-    RECT rc = { Border, Border, Width(rcClient) - Border, Border + TextSize.cy };
+    RECT rc = { Border, Border, Width(rcClient) - Border, Border + TextSize.cy + Border };
 
     m_hEdit = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_LEFT, rc, IDC_EDIT);
-    SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
+    if (m_hEdit)
+    {
+        SendMessage(m_hEdit, WM_SETFONT, (WPARAM)hFont, 0);
     SetWindowSubclass(m_hEdit, BuddyProc, 0, 0);
     Edit_SetCueBannerTextFocused(m_hEdit, TEXT("Search"), TRUE);
+    }
 
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
@@ -439,22 +443,22 @@ void RootWindow::OnSize(UINT state, int cx, int cy)
     ScreenToClient(*this, &rc);
     rc.right = cx - Border;
     SetWindowPos(m_hEdit, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
-    InvalidateRect(m_hEdit, nullptr, FALSE);;
+    InvalidateRect(m_hEdit, nullptr, FALSE);
 
     rc.top = rc.bottom + Border;
     rc.bottom = cy - Border;
     SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
-    InvalidateRect(m_ListBox, nullptr, FALSE);;
+    InvalidateRect(m_ListBox, nullptr, FALSE);
 }
 
 void RootWindow::OnEnterSizeMove()
 {
-    SetWindowBlur(*this, false);
+    //SetWindowBlur(*this, false);
 }
 
 void RootWindow::OnExitSizeMove()
 {
-    SetWindowBlur(*this, true);
+    //SetWindowBlur(*this, true);
 }
 
 void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)

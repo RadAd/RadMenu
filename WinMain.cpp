@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <tchar.h>
 //#include <objbase.h>
-//#include <commctrl.h>
+#include <commctrl.h>
 
 HINSTANCE g_hInstance = NULL;
 HACCEL g_hAccelTable = NULL;
