@@ -495,7 +495,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         const LONG w = Width(rc);
         rc.left = rc.right + Border;
         rc.right = rc.left + w - Border;
-        m_hPreview = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | WS_VSCROLL | ES_LEFT | ES_READONLY | ES_MULTILINE, rc, IDC_PREVIEW);
+        m_hPreview = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | ES_LEFT | ES_READONLY | ES_MULTILINE, rc, IDC_PREVIEW);
         if (m_hPreview)
             SendMessage(m_hPreview, WM_SETFONT, (WPARAM)hFont, 0);
     }
