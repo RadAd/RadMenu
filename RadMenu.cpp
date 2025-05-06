@@ -98,12 +98,13 @@ struct Options
     std::vector<std::tstring> cols;
     std::vector<std::tstring> out_cols;
     int header = 0;
+    LPCTSTR preview_cmd = nullptr;
     WCHAR sep = TEXT(',');
     bool sort = false;
     bool blur = true;
 
     bool ParseCommandLine(const int argc, const LPCTSTR* argv);
-    bool NeedPreview() const { return false; }
+    bool NeedPreview() const { return preview_cmd != nullptr; }
 };
 
 class RootWindow : public Window
@@ -203,7 +204,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols, out_cols }), HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols, out_cols, options.preview_cmd }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -215,6 +216,7 @@ private:
     {
         std::shared_ptr<std::tstring> line;
         std::shared_ptr<std::tstring> name;
+        std::shared_ptr<std::tstring> preview_cmd;
         int iIcon = -1;
     };
     std::vector<Item> m_items;
@@ -229,13 +231,14 @@ private:
     struct AddItemData
     {
         DisplayMode dm;
-        WCHAR sep;
+        WCHAR sep = TEXT('\0');
         std::vector<int> cols;
         std::vector<int> out_cols;
+        LPCTSTR preview_cmd = nullptr;
     };
     Item& AddItem(const LPCTSTR line, const AddItemData& aid)
     {
-        const std::vector<std::tstring> a = !aid.cols.empty() || !aid.out_cols.empty() ? split_unquote(line, aid.sep) : std::vector<std::tstring>();
+        const std::vector<std::tstring> a = !aid.cols.empty() || !aid.out_cols.empty() || aid.preview_cmd ? split_unquote(line, aid.sep) : std::vector<std::tstring>();
 
         std::tstring name;
         if (!aid.cols.empty())
@@ -268,7 +271,20 @@ private:
         }
         else
             line_out = line;
-        m_items.push_back({ std::make_shared<std::tstring>(line_out), std::make_shared<std::tstring>(name) });
+
+        std::tstring preview_cmd;
+        if (aid.preview_cmd)
+        {
+            preview_cmd = aid.preview_cmd;
+            for (int i = 0; i < a.size(); ++i)
+            {
+                auto fn = Format(TEXT("$%d"), i + 1);
+                FindAndReplace(preview_cmd, fn, a[i]);
+                //auto fs = Format(TEXT("$[%s]"), header[i].c_str());
+            }
+        }
+
+        m_items.push_back({ std::make_shared<std::tstring>(line_out), std::make_shared<std::tstring>(name), std::make_shared<std::tstring>(preview_cmd) });
         return m_items.back();
     }
 };
@@ -311,6 +327,7 @@ void ShowUsage()
         TEXT("  /dm <mode>\t- display mode\n")
         TEXT("  Where <mode> is one of:\n")
         TEXT("    fname\t\t- display file name\n")
+        TEXT("  /preview-cmd <cmd>\t- command to execute and show output in preview window\n")
         TEXT("  /sort\t\t- sort items\n")
         TEXT("  /noblur\t\t- remove blur effect"),
         TEXT("Rad Menu"), MB_OK | MB_ICONINFORMATION);
@@ -351,6 +368,8 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
             else
                 sep = s[0];
         }
+        else if (lstrcmpi(arg, TEXT("/preview-cmd")) == 0)
+            preview_cmd = argv[++argn];
         else if (lstrcmpi(arg, TEXT("/sort")) == 0)
             sort = true;
         else if (lstrcmpi(arg, TEXT("/noblur")) == 0)
@@ -547,17 +566,18 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             SendMessage(*this, WM_COMMAND, IDOK, 0);
             break;
         case LBN_SELCHANGE:
-        {
-            const int sel = m_ListBox.GetCurSel();
-            if (sel >= 0)
+            if (m_hPreview)
             {
-                const int j = (int)m_ListBox.GetItemData(sel);
-                SetWindowText(m_hPreview, m_items[j].line->c_str());
+                const int sel = m_ListBox.GetCurSel();
+                if (sel >= 0)
+                {
+                    const int j = (int)m_ListBox.GetItemData(sel);
+                    SetWindowText(m_hPreview, m_items[j].preview_cmd->c_str());
+                }
+                else
+                    SetWindowText(m_hPreview, nullptr);
             }
-            else
-                SetWindowText(m_hPreview, nullptr);
             break;
-        }
         }
         break;
 

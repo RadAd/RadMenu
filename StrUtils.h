@@ -80,3 +80,15 @@ inline std::vector<std::tstring> split_unquote(const std::tstring& str, TCHAR de
         unquote(s);
     return a;
 }
+
+inline void FindAndReplace(std::tstring& str, const std::tstring& oldStr, const std::tstring& newStr)
+{
+    if (oldStr.empty())
+        return;
+
+    for (size_t pos = 0; (pos = str.find(oldStr, pos)) != std::tstring::npos;)
+    {
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+}
