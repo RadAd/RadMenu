@@ -39,6 +39,7 @@ R CallWinApi(F f, Ps... args)
 
 #define IDC_EDIT                     100
 #define IDC_LIST                     101
+#define IDC_PREVIEW                  102
 
 const int Border = 10;
 
@@ -102,6 +103,7 @@ struct Options
     bool blur = true;
 
     bool ParseCommandLine(const int argc, const LPCTSTR* argv);
+    bool NeedPreview() const { return false; }
 };
 
 class RootWindow : public Window
@@ -208,6 +210,7 @@ private:
 
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
+    HWND m_hPreview = NULL;
     struct Item
     {
         std::shared_ptr<std::tstring> line;
@@ -272,6 +275,8 @@ private:
 
 void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
 {
+    const Options& options = *reinterpret_cast<Options*>(cs.lpCreateParams);
+
     Window::GetCreateWindow(cs);
     cs.lpszName = TEXT("Rad Menu");
     cs.style = WS_POPUP | WS_BORDER | WS_VISIBLE;
@@ -279,7 +284,7 @@ void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
     cs.dwExStyle |= WS_EX_CONTROLPARENT;
     cs.x = 100;
     cs.y = 100;
-    cs.cx = 500;
+    cs.cx = options.NeedPreview() ? 1000 : 500;
     cs.cy = 500;
 }
 
@@ -369,7 +374,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     const Options& options = *reinterpret_cast<Options*>(lpCreateStruct->lpCreateParams);
 
     if (options.blur)
-    SetWindowBlur(*this, true);
+        SetWindowBlur(*this, true);
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
 
@@ -384,10 +389,12 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     if (m_hEdit)
     {
         SendMessage(m_hEdit, WM_SETFONT, (WPARAM)hFont, 0);
-    SetWindowSubclass(m_hEdit, BuddyProc, 0, 0);
-    Edit_SetCueBannerTextFocused(m_hEdit, TEXT("Search"), TRUE);
+        SetWindowSubclass(m_hEdit, BuddyProc, 0, 0);
+        Edit_SetCueBannerTextFocused(m_hEdit, TEXT("Search"), TRUE);
     }
 
+    if (options.NeedPreview())
+        rc.right = rc.left + Width(rc)/2;
     rc.top = rc.bottom + Border;
     rc.bottom = rcClient.bottom - Border;
     if (options.icon_mode != -1)
@@ -398,6 +405,16 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
     SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
+
+    if (options.NeedPreview())
+    {
+        const LONG w = Width(rc);
+        rc.left = rc.right + Border;
+        rc.right = rc.left + w - Border;
+        m_hPreview = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_READONLY | ES_MULTILINE, rc, IDC_PREVIEW);
+        if (m_hPreview)
+            SendMessage(m_hPreview, WM_SETFONT, (WPARAM)hFont, 0);
+    }
 
     if (options.file != nullptr)
     {
@@ -445,20 +462,32 @@ void RootWindow::OnSize(UINT state, int cx, int cy)
     SetWindowPos(m_hEdit, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
     InvalidateRect(m_hEdit, nullptr, FALSE);
 
+    if (m_hPreview)
+        rc.right = rc.left + Width(rc) / 2;
     rc.top = rc.bottom + Border;
     rc.bottom = cy - Border;
     SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
     InvalidateRect(m_ListBox, nullptr, FALSE);
+
+    if (m_hPreview)
+    {
+        const LONG w = Width(rc);
+        rc.left = rc.right + Border;
+        rc.right = rc.left + w - Border;
+        SetWindowPos(m_hPreview, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
+        InvalidateRect(m_hPreview, nullptr, FALSE);
+    }
 }
 
 void RootWindow::OnEnterSizeMove()
 {
-    //SetWindowBlur(*this, false);
+    SetWindowBlur(*this, false);
 }
 
 void RootWindow::OnExitSizeMove()
 {
-    //SetWindowBlur(*this, true);
+    // TODO Do not reenable if disabled in options
+    SetWindowBlur(*this, true);
 }
 
 void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)
@@ -517,6 +546,18 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
         case LBN_DBLCLK:
             SendMessage(*this, WM_COMMAND, IDOK, 0);
             break;
+        case LBN_SELCHANGE:
+        {
+            const int sel = m_ListBox.GetCurSel();
+            if (sel >= 0)
+            {
+                const int j = (int)m_ListBox.GetItemData(sel);
+                SetWindowText(m_hPreview, m_items[j].line->c_str());
+            }
+            else
+                SetWindowText(m_hPreview, nullptr);
+            break;
+        }
         }
         break;
 
@@ -617,6 +658,7 @@ void RootWindow::FillList()
         AddItemToList(sp, j++, search);
     const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
     m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
+    SendMessage(*this, WM_COMMAND, MAKEWPARAM(IDC_LIST, LBN_SELCHANGE), m_ListBox);
     SetWindowRedraw(m_ListBox, TRUE);
 }
 
@@ -648,6 +690,7 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
         HANDLE_MSG(WM_NCHITTEST, OnNCHitTest);
         HANDLE_MSG(WM_COMMAND, OnCommand);
         HANDLE_MSG(WM_CTLCOLOREDIT, OnCtlColor);
+        HANDLE_MSG(WM_CTLCOLORSTATIC, OnCtlColor);
         HANDLE_MSG(WM_CTLCOLORLISTBOX, OnCtlColor);
         HANDLE_MSG(WM_DRAWITEM, OnDrawItem);
     case UM_ADDITEM:
