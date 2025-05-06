@@ -37,6 +37,71 @@ R CallWinApi(F f, Ps... args)
     return r;
 }
 
+DWORD ReadFromHandle(HANDLE hReadPipe, _Out_writes_to_opt_(nSize, return +1) LPWSTR lpBuffer, _In_ DWORD nSize)
+{
+    if (lpBuffer == nullptr)
+        return 0;
+
+    DWORD dwReadTotal = 0;
+
+    for (;;)
+    {
+        BYTE Buffer[1024];
+        DWORD dwRead;
+        if (!ReadFile(hReadPipe, &Buffer, ARRAYSIZE(Buffer), &dwRead, NULL))
+            break;
+
+        // TODO Do this once after we get all text
+        INT iResult = 0;
+        if (IsTextUnicode(Buffer, dwRead, &iResult))
+        {
+            memcpy_s(lpBuffer + dwReadTotal, nSize - dwReadTotal, Buffer, dwRead);
+            dwReadTotal += dwRead / sizeof(WCHAR);
+        }
+        else
+            dwReadTotal += MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)&Buffer, dwRead, lpBuffer + dwReadTotal, nSize - dwReadTotal);
+    }
+    lpBuffer[dwReadTotal] = L'\0';
+    return dwReadTotal;
+}
+
+std::tstring CreateProcess(LPCTSTR strCmdLine)
+{
+    STARTUPINFO            siStartupInfo = { sizeof(siStartupInfo) };
+    siStartupInfo.dwFlags = STARTF_USESTDHANDLES;
+
+    SECURITY_ATTRIBUTES sa = { sizeof(sa) };
+    sa.bInheritHandle = TRUE;
+
+    HANDLE hReadPipe = NULL;
+    CreatePipe(&hReadPipe, &siStartupInfo.hStdOutput, &sa, sizeof(sa));
+    SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+    siStartupInfo.hStdError = siStartupInfo.hStdOutput;
+
+    PROCESS_INFORMATION    piProcessInfo = {};
+    if (CreateProcess(NULL, const_cast<LPTSTR>(strCmdLine), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &siStartupInfo, &piProcessInfo) == FALSE)
+    {
+        CloseHandle(siStartupInfo.hStdOutput);
+        CloseHandle(hReadPipe);
+        return Format(TEXT("ERROR: Could not create new process (%d)."), GetLastError());
+    }
+    else
+    {
+        std::vector<WCHAR> Buffer(1024 * 10);
+        CloseHandle(siStartupInfo.hStdOutput);
+        DWORD ret = ReadFromHandle(hReadPipe, Buffer.data(), (DWORD) Buffer.size());
+        CloseHandle(hReadPipe);
+        Buffer.resize(ret);
+
+        WaitForSingleObject(piProcessInfo.hProcess, INFINITE);
+
+        CloseHandle(piProcessInfo.hThread);
+        CloseHandle(piProcessInfo.hProcess);
+
+        return std::tstring(Buffer.begin(), Buffer.end());
+    }
+}
+
 #define IDC_EDIT                     100
 #define IDC_LIST                     101
 #define IDC_PREVIEW                  102
@@ -430,7 +495,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         const LONG w = Width(rc);
         rc.left = rc.right + Border;
         rc.right = rc.left + w - Border;
-        m_hPreview = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_READONLY | ES_MULTILINE, rc, IDC_PREVIEW);
+        m_hPreview = Edit_Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | WS_VSCROLL | ES_LEFT | ES_READONLY | ES_MULTILINE, rc, IDC_PREVIEW);
         if (m_hPreview)
             SendMessage(m_hPreview, WM_SETFONT, (WPARAM)hFont, 0);
     }
@@ -572,7 +637,9 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
                 if (sel >= 0)
                 {
                     const int j = (int)m_ListBox.GetItemData(sel);
-                    SetWindowText(m_hPreview, m_items[j].preview_cmd->c_str());
+                    const std::tstring preview_output = CreateProcess(m_items[j].preview_cmd->c_str());
+
+                    SetWindowText(m_hPreview, preview_output.c_str());
                 }
                 else
                     SetWindowText(m_hPreview, nullptr);
