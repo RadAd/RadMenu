@@ -18,8 +18,12 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <thread>
+
+// TODO
+// Second line of text - maybe in a different color or font size
+// Tooltips
+// Thread ReadFromHandle to make app more respnsive
 
 Theme g_Theme;
 
@@ -74,29 +78,29 @@ std::tstring CreateProcess(LPCTSTR strCmdLine)
     sa.bInheritHandle = TRUE;
 
     HANDLE hReadPipe = NULL;
-    CreatePipe(&hReadPipe, &siStartupInfo.hStdOutput, &sa, sizeof(sa));
-    SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
+    CHECK_LE(CreatePipe(&hReadPipe, &siStartupInfo.hStdOutput, &sa, sizeof(sa)));
+    CHECK_LE(SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0));
     siStartupInfo.hStdError = siStartupInfo.hStdOutput;
 
     PROCESS_INFORMATION    piProcessInfo = {};
     if (CreateProcess(NULL, const_cast<LPTSTR>(strCmdLine), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &siStartupInfo, &piProcessInfo) == FALSE)
     {
-        CloseHandle(siStartupInfo.hStdOutput);
-        CloseHandle(hReadPipe);
+        CHECK_LE(CloseHandle(siStartupInfo.hStdOutput));
+        CHECK_LE(CloseHandle(hReadPipe));
         return Format(TEXT("ERROR: Could not create new process (%d)."), GetLastError());
     }
     else
     {
         std::vector<WCHAR> Buffer(1024 * 10);
-        CloseHandle(siStartupInfo.hStdOutput);
+        CHECK_LE(CloseHandle(siStartupInfo.hStdOutput));
         DWORD ret = ReadFromHandle(hReadPipe, Buffer.data(), (DWORD) Buffer.size());
-        CloseHandle(hReadPipe);
+        CHECK_LE(CloseHandle(hReadPipe));
         Buffer.resize(ret);
 
         WaitForSingleObject(piProcessInfo.hProcess, INFINITE);
 
-        CloseHandle(piProcessInfo.hThread);
-        CloseHandle(piProcessInfo.hProcess);
+        CHECK_LE(CloseHandle(piProcessInfo.hThread));
+        CHECK_LE(CloseHandle(piProcessInfo.hProcess));
 
         return std::tstring(Buffer.begin(), Buffer.end());
     }
@@ -279,9 +283,9 @@ private:
     HWND m_hPreview = NULL;
     struct Item
     {
-        std::shared_ptr<std::tstring> line;
-        std::shared_ptr<std::tstring> name;
-        std::shared_ptr<std::tstring> preview_cmd;
+        std::tstring line;
+        std::tstring name;
+        std::tstring preview_cmd;
         int iIcon = -1;
     };
     std::vector<Item> m_items;
@@ -349,7 +353,7 @@ private:
             }
         }
 
-        m_items.push_back({ std::make_shared<std::tstring>(line_out), std::make_shared<std::tstring>(name), std::make_shared<std::tstring>(preview_cmd) });
+        m_items.push_back({ line_out, name, preview_cmd });
         return m_items.back();
     }
 };
@@ -473,7 +477,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     if (m_hEdit)
     {
         SendMessage(m_hEdit, WM_SETFONT, (WPARAM)hFont, 0);
-        SetWindowSubclass(m_hEdit, BuddyProc, 0, 0);
+        CHECK_LE(SetWindowSubclass(m_hEdit, BuddyProc, 0, 0));
         Edit_SetCueBannerTextFocused(m_hEdit, TEXT("Search"), TRUE);
     }
 
@@ -485,7 +489,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     {
         m_ListBox.SetIconMode(options.icon_mode);
         const SIZE szIcon = m_ListBox.GetIconSize();
-        ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100)));
+        CHECK_LE(ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100))));
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
     SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
@@ -514,7 +518,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         for (const auto& s : a)
             if (!s.empty())
             {
-                auto ss = std::make_shared<std::tstring>(s);
+                auto ss = s;
                 m_items.push_back({ ss, ss });
             }
     }
@@ -539,27 +543,26 @@ void RootWindow::OnSetFocus(const HWND hwndOldFocus)
 
 void RootWindow::OnSize(UINT state, int cx, int cy)
 {
-    RECT rc;
-    GetWindowRect(m_hEdit, &rc);
-    ScreenToClient(*this, &rc);
+    RECT rc = CallWinApi<RECT>(GetWindowRect, m_hEdit);
+    CHECK_LE(ScreenToClient(*this, &rc));
     rc.right = cx - Border;
-    SetWindowPos(m_hEdit, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
-    InvalidateRect(m_hEdit, nullptr, FALSE);
+    CHECK_LE(SetWindowPos(m_hEdit, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER));
+    CHECK_LE(InvalidateRect(m_hEdit, nullptr, FALSE));
 
     if (m_hPreview)
         rc.right = rc.left + Width(rc) / 2;
     rc.top = rc.bottom + Border;
     rc.bottom = cy - Border;
-    SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
-    InvalidateRect(m_ListBox, nullptr, FALSE);
+    CHECK_LE(SetWindowPos(m_ListBox, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER));
+    CHECK_LE(InvalidateRect(m_ListBox, nullptr, FALSE));
 
     if (m_hPreview)
     {
         const LONG w = Width(rc);
         rc.left = rc.right + Border;
         rc.right = rc.left + w - Border;
-        SetWindowPos(m_hPreview, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER);
-        InvalidateRect(m_hPreview, nullptr, FALSE);
+        CHECK_LE(SetWindowPos(m_hPreview, NULL, rc.left, rc.top, Width(rc), Height(rc), SWP_NOOWNERZORDER | SWP_NOZORDER));
+        CHECK_LE(InvalidateRect(m_hPreview, nullptr, FALSE));
     }
 }
 
@@ -585,11 +588,10 @@ void RootWindow::OnActivate(UINT state, HWND hWndActDeact, BOOL fMinimized)
 UINT RootWindow::OnNCHitTest(int x, int y)
 {
     POINT pt = { x, y };
-    ScreenToClient(*this, &pt);
+    CHECK_LE(ScreenToClient(*this, &pt));
 
-    RECT rc;
-    GetClientRect(*this, &rc);
-    InflateRect(&rc, -5, -5);
+    RECT rc = CallWinApi<RECT>(GetClientRect, HWND(*this));
+    CHECK_LE(InflateRect(&rc, -5, -5));
 
     if (pt.x > rc.right and pt.x <= rc.top)
         return HTTOPRIGHT;
@@ -637,12 +639,12 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
                 if (sel >= 0)
                 {
                     const int j = (int)m_ListBox.GetItemData(sel);
-                    const std::tstring preview_output = CreateProcess(m_items[j].preview_cmd->c_str());
+                    const std::tstring preview_output = CreateProcess(m_items[j].preview_cmd.c_str());
 
-                    SetWindowText(m_hPreview, preview_output.c_str());
+                    CHECK_LE(SetWindowText(m_hPreview, preview_output.c_str()));
                 }
                 else
-                    SetWindowText(m_hPreview, nullptr);
+                    CHECK_LE(SetWindowText(m_hPreview, nullptr));
             }
             break;
         }
@@ -665,7 +667,7 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             if ((GetKeyState(VK_SHIFT) & 0x8000))
                 std::wcout << TEXT('+');
             const int j = (int) m_ListBox.GetItemData(sel);
-            std::wcout << *m_items[j].line << std::endl;
+            std::wcout << m_items[j].line << std::endl;
             SendMessage(*this, WM_CLOSE, 0, 0);
         }
         break;
@@ -690,7 +692,7 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
         {
             if (item.iIcon == -1)
             {
-                HICON hIcon = GetIconWithoutShortcutOverlay(item.line->c_str(), m_ListBox.GetIconMode() == ICON_BIG);
+                HICON hIcon = GetIconWithoutShortcutOverlay(item.line.c_str(), m_ListBox.GetIconMode() == ICON_BIG);
                 if (!hIcon)
                     item.iIcon = -2;
                 else
@@ -751,7 +753,7 @@ void RootWindow::FillList()
 
 void RootWindow::AddItemToList(const Item& sp, const size_t j, const std::vector<std::tstring>& search)
 {
-    const std::tstring& text = sp.name->empty() ? *sp.line : *sp.name;
+    const std::tstring& text = sp.name.empty() ? sp.line : sp.name;
     if (Matches(search, text))
     {
         SendMessage(m_ListBox, WM_SETREDRAW, FALSE, 0);
@@ -837,7 +839,7 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
 
     RadLogInitWnd(*prw, "RadMenu", L"RadMenu");
     g_hWndDlg = *prw;
-    ShowWindow(*prw, nShowCmd);
+    CHECK_LE(ShowWindow(*prw, nShowCmd));
 
     return true;
 }
