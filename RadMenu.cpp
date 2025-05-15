@@ -288,7 +288,7 @@ private:
         std::tstring preview_cmd;
         int iIcon = -1;
     };
-    std::vector<Item> m_items;
+    std::vector<std::unique_ptr<Item>> m_items;
     std::vector<std::thread> m_threads;
 
     std::vector<std::tstring> GetSearchTerms() const;
@@ -353,8 +353,8 @@ private:
             }
         }
 
-        m_items.push_back({ line_out, name, preview_cmd });
-        return m_items.back();
+        m_items.push_back(std::unique_ptr<Item>(new Item({ line_out, name, preview_cmd })));
+        return *m_items.back().get();
     }
 };
 
@@ -519,7 +519,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
             if (!s.empty())
             {
                 auto ss = s;
-                m_items.push_back({ ss, ss });
+                m_items.push_back(std::unique_ptr<Item>(new Item({ ss, ss })));
             }
     }
     LoadItemsFomFile(&std::wcin, options);
@@ -639,7 +639,7 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
                 if (sel >= 0)
                 {
                     const int j = (int)m_ListBox.GetItemData(sel);
-                    const std::tstring preview_output = CreateProcess(m_items[j].preview_cmd.c_str());
+                    const std::tstring preview_output = CreateProcess(m_items[j]->preview_cmd.c_str());
 
                     CHECK_LE(SetWindowText(m_hPreview, preview_output.c_str()));
                 }
@@ -667,7 +667,7 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             if ((GetKeyState(VK_SHIFT) & 0x8000))
                 std::wcout << TEXT('+');
             const int j = (int) m_ListBox.GetItemData(sel);
-            std::wcout << m_items[j].line << std::endl;
+            std::wcout << m_items[j]->line << std::endl;
             SendMessage(*this, WM_CLOSE, 0, 0);
         }
         break;
@@ -687,7 +687,7 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
     if (lpDrawItem->hwndItem == m_ListBox and m_ListBox.GetIconMode() >= 0 and lpDrawItem->itemID >= 0)
     {
         const int j = (int) m_ListBox.GetItemData(lpDrawItem->itemID);
-        Item& item = m_items[j];
+        Item& item = *m_items[j].get();
         if (m_ListBox.GetItemIconIndex(lpDrawItem->itemID) == -1)
         {
             if (item.iIcon == -1)
@@ -744,7 +744,7 @@ void RootWindow::FillList()
     m_ListBox.ResetContent();
     size_t j = 0;
     for (const auto& sp : m_items)
-        AddItemToList(sp, j++, search);
+        AddItemToList(*sp.get(), j++, search);
     const int sel = m_ListBox.FindStringExact(-1, seltext.c_str());
     m_ListBox.SetCurSel(sel >= 0 ? sel : 0);
     SendMessage(*this, WM_COMMAND, MAKEWPARAM(IDC_LIST, LBN_SELCHANGE), m_ListBox);
