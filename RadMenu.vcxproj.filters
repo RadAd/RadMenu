@@ -52,6 +52,12 @@
     <ClInclude Include="WindowsPlus.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="StrUtils.h" />
+    <ClInclude Include="Rad\Convert.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\NewDebug.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Rad">

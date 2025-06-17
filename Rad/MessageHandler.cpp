@@ -1,6 +1,12 @@
 #include "MessageHandler.h"
 #include <algorithm>
 
+#if _UNICODE
+#define _RPTFT0 _RPTFW0
+#else
+#define _RPTFT0 _RPTF0
+#endif
+
 LRESULT MessageHandler::ProcessMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, bool& bHandled)
 {
     Message m = { uMsg, wParam, lParam, false };
@@ -13,11 +19,7 @@ LRESULT MessageHandler::ProcessMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, 
     }
     catch (...)
     {
-#if _UNICODE
-        _RPTFW0(_CRT_ERROR, TEXT("Unhandled exception"));
-#else
-        _RPTF0(_CRT_ERROR, TEXT("Unhandled exception"));
-#endif
+        _RPTFT0(_CRT_ERROR, TEXT("Unhandled exception"));
     }
 
     _ASSERTE(m_msg == &m);
@@ -43,11 +45,7 @@ LRESULT MessageChain::ProcessMessage(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM
     }
     catch (...)
     {
-#if _UNICODE
-        _RPTFW0(_CRT_ERROR, TEXT("Unhandled exception"));
-#else
-        _RPTF0(_CRT_ERROR, TEXT("Unhandled exception"));
-#endif
+        _RPTFT0(_CRT_ERROR, TEXT("Unhandled exception"));
     }
 
     _ASSERTE(m_msg == &m);

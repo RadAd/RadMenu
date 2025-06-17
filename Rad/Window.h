@@ -37,7 +37,7 @@ public:
 
     static T* Create(const CREATESTRUCT& cs)
     {
-        T* self = new T();
+        T* self = new DEBUG_NEW T();
         if (self && CreateWnd(cs, self) != NULL)
             return self;
         else

@@ -65,12 +65,36 @@ namespace {
 
     void LogMessageBox(LogLevel l, const char* msg, SrcLocA src)
     {
-        MessageBoxA(g_hWndLog, Format("%s: %s\n%s %s:%u", AsStringA(l), msg, src.funcsig, src.file, src.line).c_str(), g_strLogCaptionA, MB_OK | GetIcon(l));
+        switch (MessageBoxA(g_hWndLog, Format("%s: %s\n%s %s:%u", AsStringA(l), msg, src.funcsig, src.file, src.line).c_str(), g_strLogCaptionA, MB_ABORTRETRYIGNORE | GetIcon(l)))
+        {
+        case IDABORT:
+            ExitProcess(-1);
+            break;
+
+        case IDRETRY:
+            DebugBreak();
+            break;
+
+        case IDIGNORE:
+            break;
+        }
     }
 
     void LogMessageBox(LogLevel l, const wchar_t* msg, SrcLocW src)
     {
-        MessageBoxW(g_hWndLog, Format(L"%s: %s\n%s %s:%u", AsStringW(l), msg, src.funcsig, src.file, src.line).c_str(), g_strLogCaptionW, MB_OK | GetIcon(l));
+        switch (MessageBoxW(g_hWndLog, Format(L"%s: %s\n%s %s:%u", AsStringW(l), msg, src.funcsig, src.file, src.line).c_str(), g_strLogCaptionW, MB_ABORTRETRYIGNORE | GetIcon(l)))
+        {
+        case IDABORT:
+            ExitProcess(-1);
+            break;
+
+        case IDRETRY:
+            DebugBreak();
+            break;
+
+        case IDIGNORE:
+            break;
+        }
     }
 }
 

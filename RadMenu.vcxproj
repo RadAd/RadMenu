@@ -68,11 +68,13 @@
   <ItemGroup>
     <ClInclude Include="EditPlus.h" />
     <ClInclude Include="ListBoxPlus.h" />
+    <ClInclude Include="Rad\Convert.h" />
     <ClInclude Include="Rad\Dialog.h" />
     <ClInclude Include="Rad\Format.h" />
     <ClInclude Include="Rad\Log.h" />
     <ClInclude Include="Rad\MemoryPlus.h" />
     <ClInclude Include="Rad\MessageHandler.h" />
+    <ClInclude Include="Rad\NewDebug.h" />
     <ClInclude Include="Rad\SourceLocation.h" />
     <ClInclude Include="Rad\Window.h" />
     <ClInclude Include="Rad\Windowxx.h" />
