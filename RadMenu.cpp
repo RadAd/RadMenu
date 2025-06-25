@@ -12,6 +12,7 @@
 #include "EditPlus.h"
 #include "ListBoxPlus.h"
 #include "StrUtils.h"
+#include "UnicodeProcessLine.h"
 //#include "resource.h"
 
 #include <string>
@@ -23,7 +24,7 @@
 // TODO
 // Second line of text - maybe in a different color or font size
 // Tooltips
-// Thread ReadFromHandle to make app more respnsive
+// Thread ReadFromHandle to make app more responsive
 
 Theme g_Theme;
 
@@ -41,6 +42,7 @@ R CallWinApi(F f, Ps... args)
     return r;
 }
 
+// TODO Replace ReadFromHandle with UnicodeProcessLine
 DWORD ReadFromHandle(HANDLE hReadPipe, _Out_writes_to_opt_(nSize, return +1) LPWSTR lpBuffer, _In_ DWORD nSize)
 {
     if (lpBuffer == nullptr)
@@ -53,6 +55,9 @@ DWORD ReadFromHandle(HANDLE hReadPipe, _Out_writes_to_opt_(nSize, return +1) LPW
         BYTE Buffer[1024];
         DWORD dwRead;
         if (!ReadFile(hReadPipe, &Buffer, ARRAYSIZE(Buffer), &dwRead, NULL))
+            break;
+
+        if (dwRead == 0)
             break;
 
         // TODO Do this once after we get all text
@@ -210,50 +215,60 @@ private:
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
     struct AddItemData;
-    static void LoadItemsFomFileThread(std::wistream* is, AddItemData* paid, HWND hWnd)
+    struct ProcessLineData
     {
-        std::tstring line;
-        while (std::getline(*is, line))
+        HWND hWnd;
+        AddItemData* paid;
+    };
+    static void ProcessLine(const std::wstring_view linev, void* data)
+    {
+        const ProcessLineData* pldata = reinterpret_cast<ProcessLineData*>(data);
+        std::wstring line(linev);
+        AddItemData* paid = pldata->paid;
+
+        if (paid->header > 0)
         {
-            if (paid->header > 0)
+            --paid->header;
+            int header = paid->header;
+            const std::vector<std::tstring> headernames = split_unquote(line, paid->sep);
+
+            // TODO Show header somewhere
+
+            assert(paid->cols_map.size() == paid->cols.size());
+            for (int i = 0; i < paid->cols.size(); ++i)
             {
-                --paid->header;
-                int header = paid->header;
-                const std::vector<std::tstring> headernames = split_unquote(line, paid->sep);
-
-                // TODO Show header somewhere
-
-                assert(paid->cols_map.size() == paid->cols.size());
-                for (int i = 0; i < paid->cols.size(); ++i)
+                auto it = std::find(headernames.begin(), headernames.end(), paid->cols[i]);
+                if (it != headernames.end())
                 {
-                    auto it = std::find(headernames.begin(), headernames.end(), paid->cols[i]);
-                    if (it != headernames.end())
-                    {
-                        const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                        paid->cols_map[i] = c;
-                    }
-                }
-
-                assert(paid->out_cols_map.size() == paid->out_cols.size());
-                for (int i = 0; i < paid->out_cols.size(); ++i)
-                {
-                    auto it = std::find(headernames.begin(), headernames.end(), paid->out_cols[i]);
-                    if (it != headernames.end())
-                    {
-                        const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                        paid->out_cols_map[i] = c;
-                    }
+                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                    paid->cols_map[i] = c;
                 }
             }
-            else if (!line.empty())
-                SendMessage(hWnd, UM_ADDITEM, WPARAM(paid), LPARAM(line.c_str()));
+
+            assert(paid->out_cols_map.size() == paid->out_cols.size());
+            for (int i = 0; i < paid->out_cols.size(); ++i)
+            {
+                auto it = std::find(headernames.begin(), headernames.end(), paid->out_cols[i]);
+                if (it != headernames.end())
+                {
+                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                    paid->out_cols_map[i] = c;
+                }
+            }
         }
-        if (is != &std::wcin)
-            delete is;
+        else if (!line.empty())
+            SendMessage(pldata->hWnd, UM_ADDITEM, WPARAM(paid), LPARAM(line.c_str()));
+    }
+
+    static void LoadItemsFromFileThread(HANDLE h, AddItemData* paid, HWND hWnd)
+    {
+        ProcessLineData pldata({ hWnd, paid });
+        UnicodeProcessLine(h, ProcessLine, &pldata);
+        CHECK_LE(CloseHandle(h));
         delete paid;
     }
 
-    void LoadItemsFomFile(std::wistream* is, const Options& options)
+    void LoadItemsFomFile(const HANDLE hFile, const Options& options)
     {
         std::vector<int> cols_map;
         for (const std::tstring& s : options.cols)
@@ -262,17 +277,8 @@ private:
         for (const std::tstring& s : options.out_cols)
             out_cols_map.push_back(_tstoi(s.c_str()) - 1);
 
-#if 0
-        std::tstring line;
-        while (std::getline(*is, line))
-            if (!line.empty())
-                AddItem(line.c_str(), dm);
-        if (is != &std::wcin)
-            delete is;
-#else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, options.header, options.cols, cols_map, options.out_cols, out_cols_map, options.preview_cmd }), HWND(*this));
+        std::thread t(LoadItemsFromFileThread, hFile, new AddItemData({ options.dm, options.sep, options.header, options.cols, cols_map, options.out_cols, out_cols_map, options.preview_cmd }), HWND(*this));
         m_threads.push_back(std::move(t));
-#endif
     }
 
     HWND m_hEdit = NULL;
@@ -506,9 +512,9 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     if (options.file != nullptr)
     {
-        auto f = std::make_unique<std::wifstream>(options.file);
-        if (*f)
-            LoadItemsFomFile(f.release(), options);
+        HANDLE hFile = CreateFile(options.file, GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (hFile)
+            LoadItemsFomFile(hFile, options);
         else
             MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
     }
@@ -522,7 +528,9 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
                 m_items.push_back(std::unique_ptr<Item>(new Item({ ss, ss })));
             }
     }
-    LoadItemsFomFile(&std::wcin, options);
+    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+    if (hStdIn)
+        LoadItemsFomFile(hStdIn, options);
 
     FillList();
 

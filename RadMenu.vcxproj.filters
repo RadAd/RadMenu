@@ -18,6 +18,7 @@
     <ClCompile Include="Rad\WinError.cpp">
       <Filter>Rad</Filter>
     </ClCompile>
+    <ClCompile Include="UnicodeProcessLine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Rad\Dialog.h">
@@ -58,6 +59,7 @@
     <ClInclude Include="Rad\NewDebug.h">
       <Filter>Rad</Filter>
     </ClInclude>
+    <ClInclude Include="UnicodeProcessLine.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Rad">
