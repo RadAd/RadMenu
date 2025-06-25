@@ -220,8 +220,12 @@ private:
         HWND hWnd;
         AddItemData* paid;
     };
-    static void ProcessLine(const std::wstring_view linev, void* data)
+    static void ProcessLine(std::wstring_view linev, void* data)
     {
+        if (!linev.empty() && linev.back() == L'\n')
+            linev.remove_suffix(1);
+        if (!linev.empty() && linev.back() == L'\r')
+            linev.remove_suffix(1);
         const ProcessLineData* pldata = reinterpret_cast<ProcessLineData*>(data);
         std::wstring line(linev);
         AddItemData* paid = pldata->paid;
@@ -495,7 +499,9 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     {
         m_ListBox.SetIconMode(options.icon_mode);
         const SIZE szIcon = m_ListBox.GetIconSize();
-        CHECK_LE(ImageList_Destroy(m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100))));
+        const HIMAGELIST hImgListOld = m_ListBox.SetImageList(ImageList_Create(szIcon.cx, szIcon.cy, ILC_COLOR32, 0, 100));
+        if (hImgListOld)
+            CHECK_LE(ImageList_Destroy(hImgListOld));
     }
     m_ListBox.Create(*this, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP | LBS_USETABSTOPS | LBS_NOTIFY | (options.sort ? LBS_SORT : 0), rc, IDC_LIST);
     SendMessage(m_ListBox, WM_SETFONT, (WPARAM)hFont, 0);
