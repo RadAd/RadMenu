@@ -210,12 +210,44 @@ private:
     static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
     struct AddItemData;
-    static void LoadItemsFomFileThread(std::wistream* is, const AddItemData* paid, HWND hWnd)
+    static void LoadItemsFomFileThread(std::wistream* is, AddItemData* paid, HWND hWnd)
     {
         std::tstring line;
         while (std::getline(*is, line))
-            if (!line.empty())
+        {
+            if (paid->header > 0)
+            {
+                --paid->header;
+                int header = paid->header;
+                const std::vector<std::tstring> headernames = split_unquote(line, paid->sep);
+
+                // TODO Show header somewhere
+
+                assert(paid->cols_map.size() == paid->cols.size());
+                for (int i = 0; i < paid->cols.size(); ++i)
+                {
+                    auto it = std::find(headernames.begin(), headernames.end(), paid->cols[i]);
+                    if (it != headernames.end())
+                    {
+                        const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                        paid->cols_map[i] = c;
+                    }
+                }
+
+                assert(paid->out_cols_map.size() == paid->out_cols.size());
+                for (int i = 0; i < paid->out_cols.size(); ++i)
+                {
+                    auto it = std::find(headernames.begin(), headernames.end(), paid->out_cols[i]);
+                    if (it != headernames.end())
+                    {
+                        const int c = static_cast<int>(std::distance(headernames.begin(), it));
+                        paid->out_cols_map[i] = c;
+                    }
+                }
+            }
+            else if (!line.empty())
                 SendMessage(hWnd, UM_ADDITEM, WPARAM(paid), LPARAM(line.c_str()));
+        }
         if (is != &std::wcin)
             delete is;
         delete paid;
@@ -229,41 +261,6 @@ private:
         std::vector<int> out_cols_map;
         for (const std::tstring& s : options.out_cols)
             out_cols_map.push_back(_tstoi(s.c_str()) - 1);
-        if (options.header > 0)
-        {
-            int header = options.header;
-            std::vector<std::tstring> headernames;
-            std::tstring line;
-            while (header > 0 && std::getline(*is, line))
-            {
-                headernames = split_unquote(line, options.sep);
-                --header;
-            }
-
-            // TODO Show header somewhere
-
-            assert(cols_map.size() == options.cols.size());
-            for (int i = 0; i < options.cols.size(); ++i)
-            {
-                auto it = std::find(headernames.begin(), headernames.end(), options.cols[i]);
-                if (it != headernames.end())
-                {
-                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                    cols_map[i] = c;
-                }
-            }
-
-            assert(out_cols_map.size() == options.out_cols.size());
-            for (int i = 0; i < options.out_cols.size(); ++i)
-            {
-                auto it = std::find(headernames.begin(), headernames.end(), options.out_cols[i]);
-                if (it != headernames.end())
-                {
-                    const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                    out_cols_map[i] = c;
-                }
-            }
-        }
 
 #if 0
         std::tstring line;
@@ -273,7 +270,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, options.header, cols_map, out_cols_map, options.preview_cmd }), HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, options.header, options.cols, cols_map, options.out_cols, out_cols_map, options.preview_cmd }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -302,7 +299,9 @@ private:
         DisplayMode dm;
         WCHAR sep;
         int header;
+        std::vector<std::tstring> cols;
         std::vector<int> cols_map;
+        std::vector<std::tstring> out_cols;
         std::vector<int> out_cols_map;
         LPCTSTR preview_cmd = nullptr;
     };
