@@ -223,12 +223,12 @@ private:
 
     void LoadItemsFomFile(std::wistream* is, const Options& options)
     {
-        std::vector<int> cols;
+        std::vector<int> cols_map;
         for (const std::tstring& s : options.cols)
-            cols.push_back(_tstoi(s.c_str()) - 1);
-        std::vector<int> out_cols;
+            cols_map.push_back(_tstoi(s.c_str()) - 1);
+        std::vector<int> out_cols_map;
         for (const std::tstring& s : options.out_cols)
-            out_cols.push_back(_tstoi(s.c_str()) - 1);
+            out_cols_map.push_back(_tstoi(s.c_str()) - 1);
         if (options.header > 0)
         {
             int header = options.header;
@@ -242,25 +242,25 @@ private:
 
             // TODO Show header somewhere
 
-            assert(cols.size() == options.cols.size());
+            assert(cols_map.size() == options.cols.size());
             for (int i = 0; i < options.cols.size(); ++i)
             {
                 auto it = std::find(headernames.begin(), headernames.end(), options.cols[i]);
                 if (it != headernames.end())
                 {
                     const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                    cols[i] = c;
+                    cols_map[i] = c;
                 }
             }
 
-            assert(out_cols.size() == options.out_cols.size());
+            assert(out_cols_map.size() == options.out_cols.size());
             for (int i = 0; i < options.out_cols.size(); ++i)
             {
                 auto it = std::find(headernames.begin(), headernames.end(), options.out_cols[i]);
                 if (it != headernames.end())
                 {
                     const int c = static_cast<int>(std::distance(headernames.begin(), it));
-                    out_cols[i] = c;
+                    out_cols_map[i] = c;
                 }
             }
         }
@@ -273,7 +273,7 @@ private:
         if (is != &std::wcin)
             delete is;
 #else
-        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, cols, out_cols, options.preview_cmd }), HWND(*this));
+        std::thread t(LoadItemsFomFileThread, is, new AddItemData({ options.dm, options.sep, options.header, cols_map, out_cols_map, options.preview_cmd }), HWND(*this));
         m_threads.push_back(std::move(t));
 #endif
     }
@@ -300,19 +300,20 @@ private:
     struct AddItemData
     {
         DisplayMode dm;
-        WCHAR sep = TEXT('\0');
-        std::vector<int> cols;
-        std::vector<int> out_cols;
+        WCHAR sep;
+        int header;
+        std::vector<int> cols_map;
+        std::vector<int> out_cols_map;
         LPCTSTR preview_cmd = nullptr;
     };
     Item& AddItem(const LPCTSTR line, const AddItemData& aid)
     {
-        const std::vector<std::tstring> a = !aid.cols.empty() || !aid.out_cols.empty() || aid.preview_cmd ? split_unquote(line, aid.sep) : std::vector<std::tstring>();
+        const std::vector<std::tstring> a = !aid.cols_map.empty() || !aid.out_cols_map.empty() || aid.preview_cmd ? split_unquote(line, aid.sep) : std::vector<std::tstring>();
 
         std::tstring name;
-        if (!aid.cols.empty())
+        if (!aid.cols_map.empty())
         {
-            for (const int c : aid.cols)
+            for (const int c : aid.cols_map)
             {
                 if (!name.empty())
                     name += TEXT("\t");
@@ -326,9 +327,9 @@ private:
             name = GetName(line);
 
         std::tstring line_out;
-        if (!aid.out_cols.empty())
+        if (!aid.out_cols_map.empty())
         {
-            for (const int c : aid.out_cols)
+            for (const int c : aid.out_cols_map)
             {
                 if (!line_out.empty())
                     line_out += aid.sep;
