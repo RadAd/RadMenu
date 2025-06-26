@@ -18,7 +18,6 @@
 #include <string>
 #include <vector>
 #include <fstream>
-#include <iostream>
 #include <thread>
 
 // TODO
@@ -40,6 +39,20 @@ R CallWinApi(F f, Ps... args)
     if (!f(args..., &r))
         throw WinError({ GetLastError(), nullptr, TEXT("CallWinApi") });
     return r;
+}
+
+BOOL WriteText(_In_ HANDLE hFile, _In_ UINT CodePage, _In_ DWORD dwFlags, _In_reads_(len) LPCWSTR lpText, _In_ int len)
+{
+    if (len == -1)
+        len = static_cast<int>(wcslen(lpText));
+
+    std::string line;
+    line.resize(len * 2);
+    const int s = ::WideCharToMultiByte(CodePage, dwFlags, lpText, len, line.data(), static_cast<int>(line.size()), nullptr, nullptr);
+    line.resize(s);
+
+    DWORD written = 0;
+    return WriteFile(hFile, line.data(), static_cast<DWORD>(line.size()), &written, nullptr);
 }
 
 // TODO Replace ReadFromHandle with UnicodeProcessLine
@@ -534,7 +547,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
                 m_items.push_back(std::unique_ptr<Item>(new Item({ ss, ss })));
             }
     }
-    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+    const HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
     if (hStdIn)
         LoadItemsFomFile(hStdIn, options);
 
@@ -676,12 +689,17 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
         const int sel = m_ListBox.GetCurSel();
         if (sel >= 0)
         {
-            if ((GetKeyState(VK_CONTROL) & 0x8000))
-                std::wcout << TEXT('!');
-            if ((GetKeyState(VK_SHIFT) & 0x8000))
-                std::wcout << TEXT('+');
-            const int j = (int) m_ListBox.GetItemData(sel);
-            std::wcout << m_items[j]->line << std::endl;
+            const HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+            if (hStdOut)
+            {
+                if ((GetKeyState(VK_CONTROL) & 0x8000))
+                    WriteText(hStdOut, CP_UTF8, 0, TEXT("!"), 1);
+                if ((GetKeyState(VK_SHIFT) & 0x8000))
+                    WriteText(hStdOut, CP_UTF8, 0, TEXT("+"), 1);
+                const int j = (int) m_ListBox.GetItemData(sel);
+                WriteText(hStdOut, CP_UTF8, 0, m_items[j]->line.c_str(), static_cast<int>(m_items[j]->line.length()));
+                WriteText(hStdOut, CP_UTF8, 0, TEXT("\n"), 1);
+            }
             SendMessage(*this, WM_CLOSE, 0, 0);
         }
         break;
