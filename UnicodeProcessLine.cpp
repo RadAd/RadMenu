@@ -17,9 +17,10 @@ enum class Encoding
     UTF8,
     UTF16_BE,
     UTF16_LE,
+    CODE_PAGE,
 };
 
-void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, std::wstring& wline, ProcessLine ppl, void* data, const bool all)
+void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, _In_ UINT CodePage, std::wstring& wline, ProcessLine ppl, void* data, const bool all)
 {
     switch (enc)
     {
@@ -46,6 +47,9 @@ void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, std::wstring& 
         break;
     }
     case Encoding::UTF8:
+        CodePage = CP_UTF8;
+        [[fallthrough]];
+    case Encoding::CODE_PAGE:
     {
         std::string_view str(reinterpret_cast<const char*>(buffer.data()), buffer.size());
         size_t b = 0;
@@ -53,7 +57,7 @@ void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, std::wstring& 
         while (e != std::string_view::npos)
         {
             const std::string_view line(str.substr(b, e - b + 1));
-            MultiByteToWideChar(CP_UTF8, 0, line, wline);
+            MultiByteToWideChar(CodePage, 0, line, wline);
             ppl(wline, data);
             b = e + 1;
             e = str.find('\n', b);
@@ -61,7 +65,7 @@ void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, std::wstring& 
         if (all)
         {
             const std::string_view line(str.substr(b));
-            MultiByteToWideChar(CP_UTF8, 0, line, wline);
+            MultiByteToWideChar(CodePage, 0, line, wline);
             ppl(wline, data);
             b = line.size();
         }
@@ -71,7 +75,7 @@ void ProcessBuffer(std::vector<BYTE>& buffer, const Encoding enc, std::wstring& 
     }
 }
 
-bool UnicodeProcessLine(const HANDLE hFile, ProcessLine ppl, void* data)
+bool UnicodeProcessLine(const HANDLE hFile, _In_ UINT CodePage, ProcessLine ppl, void* data)
 {
     Encoding enc = Encoding::Unknown;
     std::vector<BYTE> buffer;
@@ -113,7 +117,7 @@ bool UnicodeProcessLine(const HANDLE hFile, ProcessLine ppl, void* data)
             else if (IsTextUnicode(buffer.data(), static_cast<int>(buffer.size()), nullptr))
                 enc = Encoding::UTF16_LE;
             else
-                enc = Encoding::UTF8;
+                enc = Encoding::CODE_PAGE;
         }
 
         if (enc == Encoding::UTF16_BE)
@@ -126,9 +130,9 @@ bool UnicodeProcessLine(const HANDLE hFile, ProcessLine ppl, void* data)
             swapoffset = buffer.size() % 2;
         }
 
-        ProcessBuffer(buffer, enc, wline, ppl, data, false);
+        ProcessBuffer(buffer, enc, CodePage, wline, ppl, data, false);
     }
-    ProcessBuffer(buffer, enc, wline, ppl, data, true);
+    ProcessBuffer(buffer, enc, CodePage, wline, ppl, data, true);
     assert(buffer.empty());
     assert(swapoffset == 0);
     return false;

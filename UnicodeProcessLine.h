@@ -6,4 +6,4 @@
 
 typedef void ProcessLine(const std::wstring_view line, void* data);
 
-bool UnicodeProcessLine(const HANDLE hFile, ProcessLine ppl, void* data);
+bool UnicodeProcessLine(const HANDLE hFile, _In_ UINT CodePage, ProcessLine ppl, void* data);

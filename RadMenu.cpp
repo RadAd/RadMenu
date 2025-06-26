@@ -56,7 +56,7 @@ BOOL WriteText(_In_ HANDLE hFile, _In_ UINT CodePage, _In_ DWORD dwFlags, _In_re
 }
 
 // TODO Replace ReadFromHandle with UnicodeProcessLine
-DWORD ReadFromHandle(HANDLE hReadPipe, _Out_writes_to_opt_(nSize, return +1) LPWSTR lpBuffer, _In_ DWORD nSize)
+DWORD ReadFromHandle(_In_ HANDLE hReadPipe, _In_ UINT CodePage, _In_ DWORD dwFlags, _Out_writes_to_opt_(nSize, return +1) LPWSTR lpBuffer, _In_ DWORD nSize)
 {
     if (lpBuffer == nullptr)
         return 0;
@@ -81,13 +81,13 @@ DWORD ReadFromHandle(HANDLE hReadPipe, _Out_writes_to_opt_(nSize, return +1) LPW
             dwReadTotal += dwRead / sizeof(WCHAR);
         }
         else
-            dwReadTotal += MultiByteToWideChar(CP_UTF8, 0, (LPCSTR)&Buffer, dwRead, lpBuffer + dwReadTotal, nSize - dwReadTotal);
+            dwReadTotal += MultiByteToWideChar(CodePage, dwFlags, (LPCSTR)&Buffer, dwRead, lpBuffer + dwReadTotal, nSize - dwReadTotal);
     }
     lpBuffer[dwReadTotal] = L'\0';
     return dwReadTotal;
 }
 
-std::tstring CreateProcess(LPCTSTR strCmdLine)
+std::tstring CreateProcess(_In_z_ LPCTSTR strCmdLine, _In_ UINT CodePage, _In_ DWORD dwFlags)
 {
     STARTUPINFO            siStartupInfo = { sizeof(siStartupInfo) };
     siStartupInfo.dwFlags = STARTF_USESTDHANDLES;
@@ -111,7 +111,7 @@ std::tstring CreateProcess(LPCTSTR strCmdLine)
     {
         std::vector<WCHAR> Buffer(1024 * 10);
         CHECK_LE(CloseHandle(siStartupInfo.hStdOutput));
-        DWORD ret = ReadFromHandle(hReadPipe, Buffer.data(), (DWORD) Buffer.size());
+        DWORD ret = ReadFromHandle(hReadPipe, CodePage, dwFlags, Buffer.data(), (DWORD) Buffer.size());
         CHECK_LE(CloseHandle(hReadPipe));
         Buffer.resize(ret);
 
@@ -179,6 +179,7 @@ enum class DisplayMode { LINE, FNAME };
 struct Options
 {
     int icon_mode = -1;
+    UINT code_page = CP_UTF8;
     DisplayMode dm = DisplayMode::LINE;
     LPCTSTR file = nullptr;
     LPCTSTR elements = nullptr;
@@ -280,7 +281,7 @@ private:
     static void LoadItemsFromFileThread(HANDLE h, AddItemData* paid, HWND hWnd)
     {
         ProcessLineData pldata({ hWnd, paid });
-        UnicodeProcessLine(h, ProcessLine, &pldata);
+        UnicodeProcessLine(h, paid->CodePage, ProcessLine, &pldata);
         CHECK_LE(CloseHandle(h));
         delete paid;
     }
@@ -294,10 +295,11 @@ private:
         for (const std::tstring& s : options.out_cols)
             out_cols_map.push_back(_tstoi(s.c_str()) - 1);
 
-        std::thread t(LoadItemsFromFileThread, hFile, new AddItemData({ options.dm, options.sep, options.header, options.cols, cols_map, options.out_cols, out_cols_map, options.preview_cmd }), HWND(*this));
+        std::thread t(LoadItemsFromFileThread, hFile, new AddItemData({ options.dm, options.code_page, options.sep, options.header, options.cols, cols_map, options.out_cols, out_cols_map, options.preview_cmd }), HWND(*this));
         m_threads.push_back(std::move(t));
     }
 
+    UINT m_code_page = CP_UTF8;
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
     HWND m_hPreview = NULL;
@@ -320,6 +322,7 @@ private:
     struct AddItemData
     {
         DisplayMode dm;
+        UINT CodePage;
         WCHAR sep;
         int header;
         std::vector<std::tstring> cols;
@@ -410,6 +413,7 @@ void ShowUsage()
         TEXT("Where <options> are:\n")
         TEXT("  /e <elements>\t- list of options\n")
         TEXT("  /f <filename>\t- list of options\n")
+        TEXT("  /cp <code_page>\t- code page of input file (default is 65001)\n")
         TEXT("  /cols <col,>\t- list of columns\n")
         TEXT("  /out-cols <col,>\t- list of output columns\n")
         TEXT("  /sep <char>\t- column separator\n")
@@ -433,6 +437,8 @@ bool Options::ParseCommandLine(const int argc, const LPCTSTR* argv)
         LPCTSTR arg = argv[argn];
         if (lstrcmpi(arg, TEXT("/f")) == 0)
             file = argv[++argn];
+        else if (lstrcmpi(arg, TEXT("/cp")) == 0)
+            code_page = _tstoi(argv[++argn]);
         else if (lstrcmpi(arg, TEXT("/is")) == 0)
             icon_mode = ICON_SMALL;
         else if (lstrcmpi(arg, TEXT("/il")) == 0)
@@ -486,6 +492,8 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
 
     if (options.blur)
         SetWindowBlur(*this, true);
+
+    m_code_page = options.code_page;
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
 
@@ -666,7 +674,7 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
                 if (sel >= 0)
                 {
                     const int j = (int)m_ListBox.GetItemData(sel);
-                    const std::tstring preview_output = CreateProcess(m_items[j]->preview_cmd.c_str());
+                    const std::tstring preview_output = CreateProcess(m_items[j]->preview_cmd.c_str(), m_code_page, 0);
 
                     CHECK_LE(SetWindowText(m_hPreview, preview_output.c_str()));
                 }
@@ -693,12 +701,12 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             if (hStdOut)
             {
                 if ((GetKeyState(VK_CONTROL) & 0x8000))
-                    WriteText(hStdOut, CP_UTF8, 0, TEXT("!"), 1);
+                    WriteText(hStdOut, m_code_page, 0, TEXT("!"), 1);
                 if ((GetKeyState(VK_SHIFT) & 0x8000))
-                    WriteText(hStdOut, CP_UTF8, 0, TEXT("+"), 1);
+                    WriteText(hStdOut, m_code_page, 0, TEXT("+"), 1);
                 const int j = (int) m_ListBox.GetItemData(sel);
-                WriteText(hStdOut, CP_UTF8, 0, m_items[j]->line.c_str(), static_cast<int>(m_items[j]->line.length()));
-                WriteText(hStdOut, CP_UTF8, 0, TEXT("\n"), 1);
+                WriteText(hStdOut, m_code_page, 0, m_items[j]->line.c_str(), static_cast<int>(m_items[j]->line.length()));
+                WriteText(hStdOut, m_code_page, 0, TEXT("\n"), 1);
             }
             SendMessage(*this, WM_CLOSE, 0, 0);
         }
