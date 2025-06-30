@@ -99,7 +99,7 @@ bool UnicodeProcessLine(const HANDLE hFile, _In_ UINT CodePage, ProcessLine ppl,
 
         if (enc == Encoding::Unknown)
         {
-            if (buffer.size() >= 3 && buffer[0] == 0xef && buffer[1] == 0xbb && buffer[0xbf])
+            if (buffer.size() >= 3 && buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
             {
                 buffer.erase(buffer.begin(), buffer.begin() + 3);
                 enc = Encoding::UTF8;
