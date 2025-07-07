@@ -265,7 +265,7 @@ private:
         m_threads.push_back(std::move(t));
     }
 
-    UINT m_code_page = CP_UTF8;
+    UINT m_code_page = CP_ACP;
     HWND m_hEdit = NULL;
     ListBoxOwnerDrawnFixed m_ListBox;
     HWND m_hPreview = NULL;
@@ -665,7 +665,7 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             const HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hStdOut)
             {
-                RadOTextFile out(hStdOut, m_code_page, false);
+                RadOTextFile out(hStdOut, m_code_page);
                 if ((GetKeyState(VK_CONTROL) & 0x8000))
                     out.Write(TEXT("!"), CP_INTERNAL);
                 if ((GetKeyState(VK_SHIFT) & 0x8000))
