@@ -39,8 +39,17 @@ void DisplayError(const std::exception& e, const char* title)
 int WINAPI _tWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPTSTR lpCmdLine, _In_ int nShowCmd)
 try
 {
-#ifdef _DEBUG
     _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_LEAK_CHECK_DF);
+#ifdef _DEBUG
+    LPCTSTR lpDebugFileName = TEXT("RadMenuDbgLog.txt");
+    const HANDLE hLogFile =
+        NULL;
+        //CreateFile(lpDebugFileName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hLogFile)
+    {
+        _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_WARN, hLogFile);
+    }
 #endif
 
     int ret = 0;
@@ -62,6 +71,16 @@ try
     }
     _ASSERTE(_CrtCheckMemory());
     _ASSERTE(!_CrtDumpMemoryLeaks());
+#ifdef _DEBUG
+    if (hLogFile)
+    {
+        LARGE_INTEGER size = {};
+        GetFileSizeEx(hLogFile, &size);
+        CloseHandle(hLogFile);
+        if (size.QuadPart == 0)
+            DeleteFile(lpDebugFileName);
+    }
+#endif
     return ret;
 }
 catch (const std::system_error& e)
