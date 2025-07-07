@@ -123,12 +123,12 @@ public:
 
     bool WriteLine(std::string_view line, const UINT inCodePage)
     {
-        return Write(line, inCodePage) && Write("/r/n", inCodePage);
+        return Write(line, inCodePage) && Write("\r\n", inCodePage);
     }
 
     bool WriteLine(std::wstring_view wline, const UINT inCodePage)
     {
-        return Write(wline, inCodePage) && Write(L"/r/n", inCodePage);
+        return Write(wline, inCodePage) && Write(L"\r\n", inCodePage);
     }
 
 private:

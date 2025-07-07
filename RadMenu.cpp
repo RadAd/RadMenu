@@ -23,6 +23,7 @@
 // TODO
 // Second line of text - maybe in a different color or font size
 // Tooltips
+// Option to write bom on output
 
 #ifdef UNICODE
 #define CP_INTERNAL CP_UTF16_LE
@@ -658,14 +659,13 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
 
     case IDOK:
     {
-        _CrtDbgBreak();
         const int sel = m_ListBox.GetCurSel();
         if (sel >= 0)
         {
             const HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hStdOut)
             {
-                RadOTextFile out(hStdOut, m_code_page);
+                RadOTextFile out(hStdOut, m_code_page, false);
                 if ((GetKeyState(VK_CONTROL) & 0x8000))
                     out.Write(TEXT("!"), CP_INTERNAL);
                 if ((GetKeyState(VK_SHIFT) & 0x8000))
