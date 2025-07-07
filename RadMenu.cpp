@@ -3,6 +3,7 @@
 #include "Rad/Windowxx.h"
 #include "Rad/Log.h"
 #include "Rad/Format.h"
+#include "Rad/RadTextFile.h"
 #include <tchar.h>
 //#include <strsafe.h>
 #include "resource.h"
@@ -12,7 +13,6 @@
 #include "EditPlus.h"
 #include "ListBoxPlus.h"
 #include "StrUtils.h"
-#include "UnicodeProcessLine.h"
 //#include "resource.h"
 
 #include <string>
@@ -23,7 +23,12 @@
 // TODO
 // Second line of text - maybe in a different color or font size
 // Tooltips
-// Thread ReadFromHandle to make app more responsive
+
+#ifdef UNICODE
+#define CP_INTERNAL CP_UTF16_LE
+#else
+#define CP_INTERNAL CP_ACP
+#endif
 
 Theme g_Theme;
 
@@ -39,52 +44,6 @@ R CallWinApi(F f, Ps... args)
     if (!f(args..., &r))
         throw WinError({ GetLastError(), nullptr, TEXT("CallWinApi") });
     return r;
-}
-
-BOOL WriteText(_In_ HANDLE hFile, _In_ UINT CodePage, _In_ DWORD dwFlags, _In_reads_(len) LPCWSTR lpText, _In_ int len)
-{
-    if (len == -1)
-        len = static_cast<int>(wcslen(lpText));
-
-    std::string line;
-    line.resize(len * 2);
-    const int s = ::WideCharToMultiByte(CodePage, dwFlags, lpText, len, line.data(), static_cast<int>(line.size()), nullptr, nullptr);
-    line.resize(s);
-
-    DWORD written = 0;
-    return WriteFile(hFile, line.data(), static_cast<DWORD>(line.size()), &written, nullptr);
-}
-
-// TODO Replace ReadFromHandle with UnicodeProcessLine
-DWORD ReadFromHandle(_In_ HANDLE hReadPipe, _In_ UINT CodePage, _In_ DWORD dwFlags, _Out_writes_to_opt_(nSize, return +1) LPWSTR lpBuffer, _In_ DWORD nSize)
-{
-    if (lpBuffer == nullptr)
-        return 0;
-
-    DWORD dwReadTotal = 0;
-
-    for (;;)
-    {
-        BYTE Buffer[1024];
-        DWORD dwRead;
-        if (!ReadFile(hReadPipe, &Buffer, ARRAYSIZE(Buffer), &dwRead, NULL))
-            break;
-
-        if (dwRead == 0)
-            break;
-
-        // TODO Do this once after we get all text
-        INT iResult = 0;
-        if (IsTextUnicode(Buffer, dwRead, &iResult))
-        {
-            memcpy_s(lpBuffer + dwReadTotal, nSize - dwReadTotal, Buffer, dwRead);
-            dwReadTotal += dwRead / sizeof(WCHAR);
-        }
-        else
-            dwReadTotal += MultiByteToWideChar(CodePage, dwFlags, (LPCSTR)&Buffer, dwRead, lpBuffer + dwReadTotal, nSize - dwReadTotal);
-    }
-    lpBuffer[dwReadTotal] = L'\0';
-    return dwReadTotal;
 }
 
 std::tstring CreateProcess(_In_z_ LPCTSTR strCmdLine, _In_ UINT CodePage, _In_ DWORD dwFlags)
@@ -109,18 +68,23 @@ std::tstring CreateProcess(_In_z_ LPCTSTR strCmdLine, _In_ UINT CodePage, _In_ D
     }
     else
     {
-        std::vector<WCHAR> Buffer(1024 * 10);
         CHECK_LE(CloseHandle(siStartupInfo.hStdOutput));
-        DWORD ret = ReadFromHandle(hReadPipe, CodePage, dwFlags, Buffer.data(), (DWORD) Buffer.size());
-        CHECK_LE(CloseHandle(hReadPipe));
-        Buffer.resize(ret);
+
+        std::tstring result;
+        RadITextFile file(RadIFile(hReadPipe), CodePage);
+        std::tstring line;
+        while (file.ReadLine(line, CP_INTERNAL))
+        {
+            result += line;
+            result += TEXT('\n');
+        }
 
         WaitForSingleObject(piProcessInfo.hProcess, INFINITE);
 
         CHECK_LE(CloseHandle(piProcessInfo.hThread));
         CHECK_LE(CloseHandle(piProcessInfo.hProcess));
 
-        return std::tstring(Buffer.begin(), Buffer.end());
+        return result;
     }
 }
 
@@ -234,13 +198,12 @@ private:
         HWND hWnd;
         AddItemData* paid;
     };
-    static void ProcessLine(std::wstring_view linev, void* data)
+    static void ProcessLine(std::wstring_view linev, const ProcessLineData* pldata)
     {
         if (!linev.empty() && linev.back() == L'\n')
             linev.remove_suffix(1);
         if (!linev.empty() && linev.back() == L'\r')
             linev.remove_suffix(1);
-        const ProcessLineData* pldata = reinterpret_cast<ProcessLineData*>(data);
         std::wstring line(linev);
         AddItemData* paid = pldata->paid;
 
@@ -281,8 +244,10 @@ private:
     static void LoadItemsFromFileThread(HANDLE h, AddItemData* paid, HWND hWnd)
     {
         ProcessLineData pldata({ hWnd, paid });
-        UnicodeProcessLine(h, paid->CodePage, ProcessLine, &pldata);
-        CHECK_LE(CloseHandle(h));
+        RadITextFile itextfile(RadIFile(h), paid->CodePage);
+        std::wstring line;
+        while (itextfile.ReadLine(line, CP_INTERNAL))
+            ProcessLine(line, &pldata);
         delete paid;
     }
 
@@ -375,7 +340,6 @@ private:
             {
                 auto fn = Format(TEXT("$%d"), i + 1);
                 FindAndReplace(preview_cmd, fn, a[i]);
-                //auto fs = Format(TEXT("$[%s]"), header[i].c_str());
             }
         }
 
@@ -694,19 +658,20 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
 
     case IDOK:
     {
+        _CrtDbgBreak();
         const int sel = m_ListBox.GetCurSel();
         if (sel >= 0)
         {
             const HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hStdOut)
             {
+                RadOTextFile out(hStdOut, m_code_page);
                 if ((GetKeyState(VK_CONTROL) & 0x8000))
-                    WriteText(hStdOut, m_code_page, 0, TEXT("!"), 1);
+                    out.Write(TEXT("!"), CP_INTERNAL);
                 if ((GetKeyState(VK_SHIFT) & 0x8000))
-                    WriteText(hStdOut, m_code_page, 0, TEXT("+"), 1);
+                    out.Write(TEXT("+"), CP_INTERNAL);
                 const int j = (int) m_ListBox.GetItemData(sel);
-                WriteText(hStdOut, m_code_page, 0, m_items[j]->line.c_str(), static_cast<int>(m_items[j]->line.length()));
-                WriteText(hStdOut, m_code_page, 0, TEXT("\n"), 1);
+                out.WriteLine(m_items[j]->line, CP_INTERNAL);
             }
             SendMessage(*this, WM_CLOSE, 0, 0);
         }

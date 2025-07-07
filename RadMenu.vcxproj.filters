@@ -18,7 +18,12 @@
     <ClCompile Include="Rad\WinError.cpp">
       <Filter>Rad</Filter>
     </ClCompile>
-    <ClCompile Include="UnicodeProcessLine.cpp" />
+    <ClCompile Include="Rad\RadFile.cpp">
+      <Filter>Rad</Filter>
+    </ClCompile>
+    <ClCompile Include="Rad\RadTextFile.cpp">
+      <Filter>Rad</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Rad\Dialog.h">
@@ -59,7 +64,24 @@
     <ClInclude Include="Rad\NewDebug.h">
       <Filter>Rad</Filter>
     </ClInclude>
-    <ClInclude Include="UnicodeProcessLine.h" />
+    <ClInclude Include="Rad\RadFile.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\RadTextFile.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\span.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\byte_swap.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\ByteOrderMark.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
+    <ClInclude Include="Rad\Unicode.h">
+      <Filter>Rad</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Rad">

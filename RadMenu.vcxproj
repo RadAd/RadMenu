@@ -74,14 +74,17 @@
     <ClCompile Include="Rad\Dialog.cpp" />
     <ClCompile Include="Rad\Log.cpp" />
     <ClCompile Include="Rad\MessageHandler.cpp" />
+    <ClCompile Include="Rad\RadFile.cpp" />
+    <ClCompile Include="Rad\RadTextFile.cpp" />
     <ClCompile Include="Rad\Window.cpp" />
     <ClCompile Include="Rad\WinError.cpp" />
-    <ClCompile Include="UnicodeProcessLine.cpp" />
     <ClCompile Include="WinMain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EditPlus.h" />
     <ClInclude Include="ListBoxPlus.h" />
+    <ClInclude Include="Rad\ByteOrderMark.h" />
+    <ClInclude Include="Rad\byte_swap.h" />
     <ClInclude Include="Rad\Convert.h" />
     <ClInclude Include="Rad\Dialog.h" />
     <ClInclude Include="Rad\Format.h" />
@@ -89,13 +92,16 @@
     <ClInclude Include="Rad\MemoryPlus.h" />
     <ClInclude Include="Rad\MessageHandler.h" />
     <ClInclude Include="Rad\NewDebug.h" />
+    <ClInclude Include="Rad\RadFile.h" />
+    <ClInclude Include="Rad\RadTextFile.h" />
     <ClInclude Include="Rad\SourceLocation.h" />
+    <ClInclude Include="Rad\span.h" />
+    <ClInclude Include="Rad\Unicode.h" />
     <ClInclude Include="Rad\Window.h" />
     <ClInclude Include="Rad\Windowxx.h" />
     <ClInclude Include="Rad\WinError.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="StrUtils.h" />
-    <ClInclude Include="UnicodeProcessLine.h" />
     <ClInclude Include="WindowsPlus.h" />
   </ItemGroup>
   <ItemGroup>
