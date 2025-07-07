@@ -36,21 +36,52 @@ void DisplayError(const std::exception& e, const char* title)
     MessageBoxA(NULL, e.what(), title, MB_ICONERROR | MB_OK);
 }
 
+#if _DEBUG
+void __cdecl CrtDebugEnd()
+{
+    _CrtMemState state;
+    _CrtMemCheckpoint(&state);
+
+    if (state.lCounts[_CLIENT_BLOCK] != 0 ||
+        state.lCounts[_NORMAL_BLOCK] != 0 ||
+        (_crtDbgFlag & _CRTDBG_CHECK_CRT_DF && state.lCounts[_CRT_BLOCK] != 0))
+    {
+        _RPT0(_CRT_ERROR, "Detected memory leaks!\n");
+    }
+}
+
+void CrtDebugInitFile(LPCTSTR lpDebugFileName)
+{
+    const HANDLE hLogFile = CreateFile(lpDebugFileName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    _ASSERTE(hLogFile);
+    if (hLogFile && hLogFile != INVALID_HANDLE_VALUE)
+    {
+        for (int e = _CRT_WARN; e < _CRT_ERRCNT; ++e)
+        {
+            _CrtSetReportMode(e, _CrtSetReportMode(e, _CRTDBG_REPORT_MODE) | _CRTDBG_MODE_FILE);
+            _CrtSetReportFile(e, hLogFile);
+        }
+    }
+}
+
+void CrtDebugInit()
+{
+    TCHAR Filename[MAX_PATH];
+    const DWORD len = GetModuleFileName(NULL, Filename, ARRAYSIZE(Filename));
+    _ASSERTE(_tcscmp(Filename + len - 4, TEXT(".exe")) == 0);
+    _tcscpy_s(Filename + len - 4, ARRAYSIZE(Filename) - len + 4, TEXT("DbgLog.txt"));
+    CrtDebugInitFile(Filename);
+    atexit(CrtDebugEnd);
+}
+#else
+#define CrtDebugInit()                   ((int)0)
+#endif
+
 int WINAPI _tWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPTSTR lpCmdLine, _In_ int nShowCmd)
 try
 {
     _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_LEAK_CHECK_DF);
-#ifdef _DEBUG
-    LPCTSTR lpDebugFileName = TEXT("RadMenuDbgLog.txt");
-    const HANDLE hLogFile =
-        NULL;
-        //CreateFile(lpDebugFileName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hLogFile)
-    {
-        _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
-        _CrtSetReportFile(_CRT_WARN, hLogFile);
-    }
-#endif
+    CrtDebugInit();
 
     int ret = 0;
     g_hInstance = hInstance;
@@ -69,18 +100,7 @@ try
         CoUninitialize();
 #endif
     }
-    _ASSERTE(_CrtCheckMemory());
-    _ASSERTE(!_CrtDumpMemoryLeaks());
-#ifdef _DEBUG
-    if (hLogFile)
-    {
-        LARGE_INTEGER size = {};
-        GetFileSizeEx(hLogFile, &size);
-        CloseHandle(hLogFile);
-        if (size.QuadPart == 0)
-            DeleteFile(lpDebugFileName);
-    }
-#endif
+
     return ret;
 }
 catch (const std::system_error& e)

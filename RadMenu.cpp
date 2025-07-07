@@ -505,7 +505,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
     if (options.file != nullptr)
     {
         HANDLE hFile = CreateFile(options.file, GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (hFile)
+        if (hFile && hFile != INVALID_HANDLE_VALUE)
             LoadItemsFomFile(hFile, options);
         else
             MessageBox(*this, Format(TEXT("Error opening file: %s"), options.file).c_str(), TEXT("Rad Menu"), MB_OK | MB_ICONERROR);
