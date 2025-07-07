@@ -2,6 +2,13 @@
 
 #include "ByteOrderMark.h"
 #include "byte_swap.h"
+#include "NewDebug.h"
+
+namespace std
+{
+    using string_dbg = basic_string<char, char_traits<char>, DebugAllocator<char, _IGNORE_BLOCK>>;
+    using wstring_dbg = basic_string<wchar_t, char_traits<wchar_t>, DebugAllocator<wchar_t, _IGNORE_BLOCK>>;
+};
 
 // RadITextFile
 
@@ -11,7 +18,7 @@ bool RadITextFile::ReadLine(std::string& line, const UINT outCodePage)
     _ASSERTE(!IsWide16(outCodePage));
     if (IsWide16(m_cp))
     {
-        thread_local std::wstring wline;
+        thread_local std::wstring_dbg wline;
         const bool r = ReadLineInternal(wline, IsBigEndian(m_cp));
         if (r)
             WideCharToMultiByte(outCodePage, 0, wline, line);
@@ -24,7 +31,7 @@ bool RadITextFile::ReadLine(std::string& line, const UINT outCodePage)
         const bool r = ReadLineInternal(line);
         if (r && m_cp != outCodePage && outCodePage != CP_UNKNOWN)
         {
-            thread_local std::wstring wline;
+            thread_local std::wstring_dbg wline;
             MultiByteToWideChar(m_cp, 0, line, wline);
             WideCharToMultiByte(outCodePage, 0, wline, line);
         }
@@ -40,7 +47,7 @@ bool RadITextFile::ReadLine(std::wstring& wline, const UINT outCodePage)
         return ReadLineInternal(wline, IsLittleEndian(m_cp) != IsLittleEndian(outCodePage));
     else
     {
-        thread_local std::string line;
+        thread_local std::string_dbg line;
         const bool r = ReadLineInternal(line);
         if (r)
         {

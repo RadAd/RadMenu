@@ -19,14 +19,16 @@ inline bool IsWide32(_In_ const UINT cp) { return cp == CP_UTF32_LE || cp == CP_
 inline bool IsLittleEndian(_In_ const UINT cp) { return cp == CP_UTF16_LE || cp == CP_UTF32_LE; }
 inline bool IsBigEndian(_In_ const UINT cp) { return cp == CP_UTF16_BE || cp == CP_UTF32_BE; }
 
-inline void MultiByteToWideChar(_In_ const UINT CodePage, _In_ const DWORD dwFlags, _In_ const std::string_view line, _Out_ std::wstring& wline)
+template <class Alloc>
+inline void MultiByteToWideChar(_In_ const UINT CodePage, _In_ const DWORD dwFlags, _In_ const std::string_view line, _Out_ std::basic_string<wchar_t, std::char_traits<wchar_t>, Alloc>& wline)
 {
     wline.resize(line.size());
     const int s = ::MultiByteToWideChar(CodePage, dwFlags, line.data(), static_cast<int>(line.size()), wline.data(), static_cast<int>(wline.size()));
     wline.resize(s);
 }
 
-inline void WideCharToMultiByte(_In_ const UINT CodePage, _In_ const DWORD dwFlags, _In_ const std::wstring_view wline, _Out_ std::string& line, _In_opt_ LPCCH lpDefaultChar = nullptr, _Out_opt_ LPBOOL lpUsedDefaultChar = nullptr)
+template <class Alloc>
+inline void WideCharToMultiByte(_In_ const UINT CodePage, _In_ const DWORD dwFlags, _In_ const std::wstring_view wline, _Out_ std::basic_string<char, std::char_traits<char>, Alloc>& line, _In_opt_ LPCCH lpDefaultChar = nullptr, _Out_opt_ LPBOOL lpUsedDefaultChar = nullptr)
 {
     line.resize(wline.size() * 2);
     const int s = ::WideCharToMultiByte(CodePage, dwFlags, wline.data(), static_cast<int>(wline.size()), line.data(), static_cast<int>(line.size()), lpDefaultChar, lpUsedDefaultChar);
