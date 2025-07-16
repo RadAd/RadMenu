@@ -162,7 +162,32 @@ struct Options
 
 class RootWindow : public Window
 {
+public:
     friend WindowManager<RootWindow>;
+    struct Class
+    {
+        static LPCTSTR ClassName() { return TEXT("RadMenu"); }
+        static void GetWndClass(WNDCLASS& wc)
+        {
+            //MainClass::GetWndClass(wc);
+            wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+            wc.hbrBackground = g_Theme.brWindow;
+            wc.hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_ICON1));
+        }
+        static void GetCreateWindow(CREATESTRUCT& cs)
+        {
+            //MainClass::GetCreateWindow(cs);
+            cs.style = WS_POPUP | WS_BORDER | WS_VISIBLE;
+            cs.dwExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+            cs.dwExStyle |= WS_EX_CONTROLPARENT;
+            cs.x = 100;
+            cs.y = 100;
+            cs.cx = 500;
+            cs.cy = 500;
+        }
+    };
+
+private:
     ~RootWindow()
     {
         for (auto& t : m_threads)
@@ -170,12 +195,13 @@ class RootWindow : public Window
     }
 
 public:
-    static ATOM Register() { return WindowManager<RootWindow>::Register(); }
-    static RootWindow* Create(const Options& options) { return WindowManager<RootWindow>::Create(reinterpret_cast<LPVOID>(const_cast<Options*>(&options))); }
+    static RootWindow* Create(const Options& options)
+    {
+        return WindowManager<RootWindow>::Create(NULL, TEXT("Rad Menu"), reinterpret_cast<LPVOID>(const_cast<Options*>(&options)));
+    }
 
 protected:
-    static void GetCreateWindow(CREATESTRUCT& cs);
-    static void GetWndClass(WNDCLASS& wc);
+    void GetCreateWindow(CREATESTRUCT& cs) override;
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 
 private:
@@ -190,8 +216,6 @@ private:
     void OnCommand(int id, HWND hWndCtl, UINT codeNotify);
     HBRUSH OnCtlColor(HDC hdc, HWND hWndChild, int type);
     void OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem);
-
-    static LPCTSTR ClassName() { return TEXT("RadMenu"); }
 
     struct AddItemData;
     struct ProcessLineData
@@ -351,24 +375,9 @@ private:
 
 void RootWindow::GetCreateWindow(CREATESTRUCT& cs)
 {
-    const Options& options = *reinterpret_cast<Options*>(cs.lpCreateParams);
-
     Window::GetCreateWindow(cs);
-    cs.lpszName = TEXT("Rad Menu");
-    cs.style = WS_POPUP | WS_BORDER | WS_VISIBLE;
-    cs.dwExStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
-    cs.dwExStyle |= WS_EX_CONTROLPARENT;
-    cs.x = 100;
-    cs.y = 100;
+    const Options& options = *reinterpret_cast<Options*>(cs.lpCreateParams);
     cs.cx = options.NeedPreview() ? 1000 : 500;
-    cs.cy = 500;
-}
-
-void RootWindow::GetWndClass(WNDCLASS& wc)
-{
-    Window::GetWndClass(wc);
-    wc.hbrBackground = g_Theme.brWindow;
-    wc.hIcon = LoadIcon(g_hInstance, MAKEINTRESOURCE(IDI_ICON1));
 }
 
 void ShowUsage()
@@ -837,7 +846,7 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
 
     InitTheme();
 
-    CHECK_LE_RET(RootWindow::Register(), false);
+    CHECK_LE_RET(Register<RootWindow::Class>(), false);
 
     RootWindow* prw = RootWindow::Create(options);
     CHECK_LE_RET(prw != nullptr, false);

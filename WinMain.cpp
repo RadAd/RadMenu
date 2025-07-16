@@ -83,7 +83,7 @@ try
     _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_LEAK_CHECK_DF);
     CrtDebugInit();
 
-    int ret = 0;
+    int ret = EXIT_FAILURE;
     g_hInstance = hInstance;
 #ifdef _OBJBASE_H_  // from objbase.h
     if (SUCCEEDED(CoInitialize(nullptr)))
@@ -115,5 +115,5 @@ catch (const std::exception& e)
     char Filename[MAX_PATH];
     GetModuleFileNameA(NULL, Filename, ARRAYSIZE(Filename));
     DisplayError(e, Filename);
-    return 1;
+    return EXIT_FAILURE;
 }
