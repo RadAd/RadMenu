@@ -162,7 +162,6 @@ struct Options
 
 class RootWindow : public Window
 {
-public:
     friend WindowManager<RootWindow>;
     struct Class
     {
@@ -195,6 +194,7 @@ private:
     }
 
 public:
+    static ATOM Register() { return ::Register<Class>(); }
     static RootWindow* Create(const Options& options)
     {
         return WindowManager<RootWindow>::Create(NULL, TEXT("Rad Menu"), reinterpret_cast<LPVOID>(const_cast<Options*>(&options)));
@@ -846,7 +846,7 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
 
     InitTheme();
 
-    CHECK_LE_RET(Register<RootWindow::Class>(), false);
+    CHECK_LE_RET(RootWindow::Register(), false);
 
     RootWindow* prw = RootWindow::Create(options);
     CHECK_LE_RET(prw != nullptr, false);
