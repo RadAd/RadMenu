@@ -365,6 +365,7 @@ private:
 
     UINT m_code_page = CP_ACP;
     HWND m_hEdit = NULL;
+    DisplayMode m_dm = DisplayMode::LINE;
     ListBoxOwnerDrawnFixed m_ListBox;
     HWND m_hPreview = NULL;
     struct Item
@@ -542,6 +543,7 @@ BOOL RootWindow::OnCreate(const LPCREATESTRUCT lpCreateStruct)
         SetWindowBlur(*this, true);
 
     m_code_page = options.code_page;
+    m_dm = options.dm;
 
     const RECT rcClient = CallWinApi<RECT>(GetClientRect, HWND(*this));
 
@@ -798,40 +800,41 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
 
 void RootWindow::OnContextMenu(HWND hWndContext, UINT xPos, UINT yPos)
 {
-    // TODO if (dm == DisplayMode::FNAME)
-
-    int sel = 0;
-    POINT ptIn = { (LONG) xPos, (LONG) yPos };
-    if (ptIn.x == -1 && ptIn.y == -1)
+    if (m_dm == DisplayMode::FNAME)
     {
-        sel = m_ListBox.GetCurSel();
+        int sel = 0;
+        POINT ptIn = { (LONG) xPos, (LONG) yPos };
+        if (ptIn.x == -1 && ptIn.y == -1)
+        {
+            sel = m_ListBox.GetCurSel();
+            if (sel >= 0)
+            {
+                RECT r = {};
+                m_ListBox.GetItemRect(sel, &r);
+                ptIn = POINT({ r.right, r.top });
+                ClientToScreen(m_ListBox, &ptIn);
+                xPos = ptIn.x;
+                yPos = ptIn.y;
+            }
+        }
+        else
+        {
+            ScreenToClient(m_ListBox, &ptIn);
+            sel = m_ListBox.ItemFromPoint(ptIn);
+        }
         if (sel >= 0)
         {
-            RECT r = {};
-            m_ListBox.GetItemRect(sel, &r);
-            ptIn = POINT({ r.right, r.top });
-            ClientToScreen(m_ListBox, &ptIn);
-            xPos = ptIn.x;
-            yPos = ptIn.y;
+            const int j = (int) m_ListBox.GetItemData(sel);
+
+            WCHAR directory[MAX_PATH];
+            CHECK_LE_THROW(GetCurrentDirectory(ARRAYSIZE(directory), directory));
+            WCHAR filePath[MAX_PATH];
+            PathCombine(filePath, directory, m_items[j]->line.c_str());
+
+            POINT ptMenu = { (LONG) xPos, (LONG) yPos };
+            // TODO Add open location to context menu
+            ShowFileContextMenu(*this, filePath, ptMenu);
         }
-    }
-    else
-    {
-        ScreenToClient(m_ListBox, &ptIn);
-        sel = m_ListBox.ItemFromPoint(ptIn);
-    }
-    if (sel >= 0)
-    {
-        const int j = (int) m_ListBox.GetItemData(sel);
-
-        WCHAR directory[MAX_PATH];
-        CHECK_LE_THROW(GetCurrentDirectory(ARRAYSIZE(directory), directory));
-        WCHAR filePath[MAX_PATH];
-        PathCombine(filePath, directory, m_items[j]->line.c_str());
-
-        POINT ptMenu = { (LONG) xPos, (LONG) yPos };
-        // TODO Add open location to context menu
-        ShowFileContextMenu(*this, filePath, ptMenu);
     }
 }
 
