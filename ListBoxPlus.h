@@ -22,6 +22,8 @@ inline void InitTheme()
     g_Theme.brHighlight = CreateSolidBrush(g_Theme.clrHighlight);
 }
 
+#define ListBox_ItemFromPoint(hwndCtl, pt)       ((int)(DWORD)SNDMSG((hwndCtl), LB_ITEMFROMPOINT, 0L, (LPARAM) MAKELPARAM(pt.x, pt.y)))
+
 class ListBox
 {
 public:
@@ -48,6 +50,7 @@ public:
     int SetItemData(int i, LPARAM data) { return ListBox_SetItemData(m_hWnd, i, data); }
     int SetTopIndex(int i) const { return ListBox_SetTopIndex(m_hWnd, i); }
     int FindStringExact(int i, LPCTSTR lpsz) const { return ListBox_FindStringExact(m_hWnd, i, lpsz); }
+    int ItemFromPoint(POINT pt) const { return ListBox_ItemFromPoint(m_hWnd, pt); }
 
     int GetVisibleCount() const
     {

@@ -9,6 +9,7 @@
 #include "resource.h"
 
 #include <Shlwapi.h>
+#include <shlobj.h>
 
 #include "EditPlus.h"
 #include "ListBoxPlus.h"
@@ -89,6 +90,69 @@ std::tstring CreateProcess(_In_z_ LPCTSTR strCmdLine, _In_ UINT CodePage, _In_ D
     }
 }
 
+IContextMenu2* g_pcm2 = nullptr;
+IContextMenu3* g_pcm3 = nullptr;
+
+void ShowFileContextMenu(HWND hWnd, LPCWSTR filePath, POINT pt)
+{
+    PIDLIST_ABSOLUTE pidl = ILCreateFromPath(filePath);
+    if (!pidl)
+        return;
+
+    IShellFolder* psfFolder = nullptr;
+    LPCITEMIDLIST pidlChild = nullptr;
+    SHBindToParent(pidl, IID_PPV_ARGS(&psfFolder), &pidlChild);
+
+    if (psfFolder)
+    {
+        IContextMenu* pcm = nullptr;
+        if (SUCCEEDED(psfFolder->GetUIObjectOf(hWnd, 1, &pidlChild, IID_IContextMenu, nullptr, (void**) &pcm)))
+        {
+            HMENU hMenu = CreatePopupMenu();
+            if (hMenu)
+            {
+                bool bShiftDown = GetKeyState(VK_SHIFT) & KF_UP;
+                if (SUCCEEDED(pcm->QueryContextMenu(hMenu, 0, 1, 0x7FFF, CMF_NORMAL | CMF_NODEFAULT | CMF_ITEMMENU | (bShiftDown ? CMF_EXTENDEDVERBS : 0) )))
+                {
+                    pcm->QueryInterface(IID_IContextMenu2, (void**) &g_pcm2);
+                    pcm->QueryInterface(IID_IContextMenu3, (void**) &g_pcm3);
+                    int idCmd = TrackPopupMenu(hMenu, TPM_RETURNCMD, pt.x, pt.y, 0, hWnd, nullptr);
+                    if (g_pcm2)
+                    {
+                        g_pcm2->Release();
+                        g_pcm2 = nullptr;
+                    }
+                    if (g_pcm3)
+                    {
+                        g_pcm3->Release();
+                        g_pcm3 = nullptr;
+                    }
+                    if (idCmd > 0)
+                    {
+                        idCmd -= 1;
+                        CMINVOKECOMMANDINFOEX cmi = { sizeof(CMINVOKECOMMANDINFOEX) };
+                        cmi.fMask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
+                        if (GetKeyState(VK_CONTROL) & KF_UP)
+                            cmi.fMask |= CMIC_MASK_CONTROL_DOWN;
+                        if (bShiftDown)
+                            cmi.fMask |= CMIC_MASK_SHIFT_DOWN;
+                        cmi.hwnd = hWnd;
+                        cmi.lpVerb = MAKEINTRESOURCEA(idCmd);
+                        cmi.lpVerbW = MAKEINTRESOURCEW(idCmd);
+                        cmi.nShow = SW_SHOWNORMAL;
+                        cmi.ptInvoke = pt;
+                        pcm->InvokeCommand((LPCMINVOKECOMMANDINFO) &cmi);
+                    }
+                }
+                DestroyMenu(hMenu);
+            }
+            pcm->Release();
+        }
+        psfFolder->Release();
+    }
+    ILFree(pidl);
+}
+
 #define IDC_EDIT                     100
 #define IDC_LIST                     101
 #define IDC_PREVIEW                  102
@@ -103,9 +167,9 @@ LRESULT CALLBACK BuddyProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, U
     case WM_KEYUP:
     {
         const UINT vk = (UINT) (wParam);
-        const int cRepeat = (int) (short) LOWORD(lParam);
-        UINT flags = (UINT) HIWORD(lParam);
-        if ((GetKeyState(VK_SHIFT) & 0x8000) == 0)
+        //const int cRepeat = (int) (short) LOWORD(lParam);
+        //UINT flags = (UINT) HIWORD(lParam);
+        if (!(GetKeyState(VK_SHIFT) & KF_UP))
         {
             switch (vk)
             {
@@ -119,7 +183,16 @@ LRESULT CALLBACK BuddyProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, U
             }
             }
         }
+        break;
     }
+    case WM_CONTEXTMENU:
+        if (lParam == -1)
+        {
+            HWND hWndBuddy = GetWindow(hWnd, GW_HWNDNEXT);
+            SendMessage(hWndBuddy, uMsg, wParam, lParam);
+            return 0;
+        }
+        break;
     }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
@@ -216,6 +289,7 @@ private:
     void OnCommand(int id, HWND hWndCtl, UINT codeNotify);
     HBRUSH OnCtlColor(HDC hdc, HWND hWndChild, int type);
     void OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem);
+    void OnContextMenu(HWND hWndContext, UINT xPos, UINT yPos);
 
     struct AddItemData;
     struct ProcessLineData
@@ -675,9 +749,9 @@ void RootWindow::OnCommand(int id, HWND hWndCtl, UINT codeNotify)
             if (hStdOut)
             {
                 RadOTextFile out(hStdOut, m_code_page);
-                if ((GetKeyState(VK_CONTROL) & 0x8000))
+                if (!(GetKeyState(VK_CONTROL) & KF_UP))
                     out.Write(TEXT("!"), CP_INTERNAL);
-                if ((GetKeyState(VK_SHIFT) & 0x8000))
+                if (!(GetKeyState(VK_SHIFT) & KF_UP))
                     out.Write(TEXT("+"), CP_INTERNAL);
                 const int j = (int) m_ListBox.GetItemData(sel);
                 out.WriteLine(m_items[j]->line, CP_INTERNAL);
@@ -720,6 +794,45 @@ void RootWindow::OnDrawItem(const DRAWITEMSTRUCT* lpDrawItem)
         }
     }
     SetHandled(false);
+}
+
+void RootWindow::OnContextMenu(HWND hWndContext, UINT xPos, UINT yPos)
+{
+    // TODO if (dm == DisplayMode::FNAME)
+
+    int sel = 0;
+    POINT ptIn = { (LONG) xPos, (LONG) yPos };
+    if (ptIn.x == -1 && ptIn.y == -1)
+    {
+        sel = m_ListBox.GetCurSel();
+        if (sel >= 0)
+        {
+            RECT r = {};
+            m_ListBox.GetItemRect(sel, &r);
+            ptIn = POINT({ r.right, r.top });
+            ClientToScreen(m_ListBox, &ptIn);
+            xPos = ptIn.x;
+            yPos = ptIn.y;
+        }
+    }
+    else
+    {
+        ScreenToClient(m_ListBox, &ptIn);
+        sel = m_ListBox.ItemFromPoint(ptIn);
+    }
+    if (sel >= 0)
+    {
+        const int j = (int) m_ListBox.GetItemData(sel);
+
+        WCHAR directory[MAX_PATH];
+        CHECK_LE_THROW(GetCurrentDirectory(ARRAYSIZE(directory), directory));
+        WCHAR filePath[MAX_PATH];
+        PathCombine(filePath, directory, m_items[j]->line.c_str());
+
+        POINT ptMenu = { (LONG) xPos, (LONG) yPos };
+        // TODO Add open location to context menu
+        ShowFileContextMenu(*this, filePath, ptMenu);
+    }
 }
 
 std::vector<std::tstring> RootWindow::GetSearchTerms() const
@@ -780,6 +893,23 @@ void RootWindow::AddItemToList(const Item& sp, const size_t j, const std::vector
 
 LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LPARAM lParam)
 {
+    if (g_pcm3)
+    {
+        LRESULT lres;
+        if (SUCCEEDED(g_pcm3->HandleMenuMsg2(uMsg, wParam, lParam, &lres)))
+        {
+            SetHandled(true);
+            return lres;
+        }
+    }
+    if (g_pcm2)
+    {
+        if (SUCCEEDED(g_pcm2->HandleMenuMsg(uMsg, wParam, lParam)))
+        {
+            SetHandled(true);
+            return 0;
+        }
+    }
     LRESULT ret = 0;
     switch (uMsg)
     {
@@ -796,6 +926,7 @@ LRESULT RootWindow::HandleMessage(const UINT uMsg, const WPARAM wParam, const LP
         HANDLE_MSG(WM_CTLCOLORSTATIC, OnCtlColor);
         HANDLE_MSG(WM_CTLCOLORLISTBOX, OnCtlColor);
         HANDLE_MSG(WM_DRAWITEM, OnDrawItem);
+        HANDLE_MSG(WM_CONTEXTMENU, OnContextMenu);
     case UM_ADDITEM:
     {
         SetHandled(true);
@@ -850,6 +981,7 @@ bool Run(_In_ const LPCTSTR lpCmdLine, _In_ const int nShowCmd)
 
     RootWindow* prw = RootWindow::Create(options);
     CHECK_LE_RET(prw != nullptr, false);
+    _Analysis_assume_(prw != nullptr);
 
     RadLogInitWnd(*prw, "RadMenu", L"RadMenu");
     g_hWndDlg = *prw;
